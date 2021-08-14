@@ -1,0 +1,82 @@
+package com.example
+
+import org.apache.kafka.common.serialization.Serdes
+import org.apache.kafka.streams.{ TestInputTopic, TestOutputTopic, Topology, TopologyTestDriver }
+import org.apache.kafka.streams.scala.kstream.KTable
+
+import java.{ lang, util }
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.kstream.KStream
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import scala.jdk.CollectionConverters._
+import java.util.regex.Pattern
+
+class WordCountSimpleSpec extends SpecBase {
+
+  val wordInputTopicName  = "inputTopic"
+  val wordOutputTopicName = "outputTopic"
+
+  val translationInputTopic  = "translationInputTopic";
+  val translationOutputTopic = "translationOutputTopic";
+
+  val inputValues = List(
+    "Hello Kafka Streams",
+    "All streams lead to Kafka",
+    "Join Kafka Summit",
+    "И теперь пошли русские слова"
+  )
+
+  val wordPattern: Pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+
+  val expectedWordCounts: Map[String, Long] = Map(
+    "hello"   -> 1L,
+    "all"     -> 1L,
+    "streams" -> 2L,
+    "lead"    -> 1L,
+    "to"      -> 1L,
+    "join"    -> 1L,
+    "kafka"   -> 3L,
+    "summit"  -> 1L,
+    "и"       -> 1L,
+    "теперь"  -> 1L,
+    "пошли"   -> 1L,
+    "русские" -> 1L,
+    "слова"   -> 1L
+  )
+
+  "must count words across messages in topic" in {
+
+    val textLines: KStream[Int, String] =
+      builder.stream(wordInputTopicName) //(Consumed.`with`(Serdes.Integer(), Serdes.String()))
+
+    val wordCounts: KTable[String, Long] = textLines
+      .flatMapValues((v: String) => List.from(wordPattern.split(v.toLowerCase)))
+      // no need to specify explicit serdes because the resulting key and value types match our default serde settings
+      .groupBy((_: Int, word: String) => word) //(Grouped.`with`(Serdes.Integer(), Serdes.String()))
+      .count()                                 //(Materialized.`with`(Serdes.Integer(), Serdes.String()))
+
+    wordCounts.toStream.to(wordOutputTopicName)
+
+    val topology: Topology = builder.build()
+    info(topology.describe())
+
+    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
+
+    val inputTopic: TestInputTopic[Integer, String] = topologyTestDriver.createInputTopic(
+      wordInputTopicName,
+      Serdes.Integer().serializer(),
+      Serdes.String().serializer()
+    )
+    val outputTopic: TestOutputTopic[String, lang.Long] = topologyTestDriver.createOutputTopic(
+      wordOutputTopicName,
+      Serdes.String().deserializer(),
+      Serdes.Long().deserializer()
+    )
+
+    inputTopic.pipeValueList(inputValues.asJava)
+
+    val outputRecords: util.Map[String, lang.Long] = outputTopic.readKeyValuesToMap()
+    outputRecords.asScala must contain theSameElementsAs expectedWordCounts
+  }
+
+}
