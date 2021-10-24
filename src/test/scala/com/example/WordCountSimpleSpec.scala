@@ -2,22 +2,17 @@ package com.example
 
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.{ TestInputTopic, TestOutputTopic, Topology, TopologyTestDriver }
-import org.apache.kafka.streams.scala.kstream.KTable
 
 import java.{ lang, util }
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.kstream.KStream
-import org.apache.kafka.streams.scala.serialization.Serdes._
 import scala.jdk.CollectionConverters._
-import java.util.regex.Pattern
 
 class WordCountSimpleSpec extends SpecBase {
 
   val wordInputTopicName  = "inputTopic"
   val wordOutputTopicName = "outputTopic"
 
-  val translationInputTopic  = "translationInputTopic";
-  val translationOutputTopic = "translationOutputTopic";
+  val translationInputTopic  = "translationInputTopic"
+  val translationOutputTopic = "translationOutputTopic"
 
   val inputValues = List(
     "Hello Kafka Streams",
@@ -25,8 +20,6 @@ class WordCountSimpleSpec extends SpecBase {
     "Join Kafka Summit",
     "И теперь пошли русские слова"
   )
-
-  val wordPattern: Pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
   val expectedWordCounts: Map[String, Long] = Map(
     "hello"   -> 1L,
@@ -46,18 +39,7 @@ class WordCountSimpleSpec extends SpecBase {
 
   "must count words across messages in topic" in {
 
-    val textLines: KStream[Int, String] =
-      builder.stream(wordInputTopicName) //(Consumed.`with`(Serdes.Integer(), Serdes.String()))
-
-    val wordCounts: KTable[String, Long] = textLines
-      .flatMapValues((v: String) => List.from(wordPattern.split(v.toLowerCase)))
-      // no need to specify explicit serdes because the resulting key and value types match our default serde settings
-      .groupBy((_: Int, word: String) => word) //(Grouped.`with`(Serdes.Integer(), Serdes.String()))
-      .count()                                 //(Materialized.`with`(Serdes.Integer(), Serdes.String()))
-
-    wordCounts.toStream.to(wordOutputTopicName)
-
-    val topology: Topology = builder.build()
+    val topology: Topology = WordCount.createTopology(builder, wordInputTopicName, wordOutputTopicName)
     info(topology.describe())
 
     val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)

@@ -50,6 +50,9 @@ lazy val kstreams_scala =
         library.kafkaAvroSerializer,
         library.circeKafka,
         library.kafkaStreamsCirce,
+        library.betterFiles,
+        library.config,
+        library.scopt,
         library.circeGeneric,
         library.airframeLog,
         library.logback,
@@ -80,28 +83,34 @@ lazy val library =
   new {
     object Version {
       val kafka             = "2.8.0"
-      val confluent         = "6.1.2"
+      val confluent         = "6.2.1"
       val circeKafka        = "2.7.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
+      val betterFiles       = "3.9.1"
+      val config            = "1.4.1"
+      val scopt             = "4.0.1"
       val airframeLog       = "20.12.1"
       val logback           = "1.2.3"
       val scalatest         = "3.2.0"
       val log4j             = "1.2.17"
       val slfLog4j          = "1.7.30"
     }
-    val clients             = "org.apache.kafka"    % "kafka-clients"            % Version.kafka
-    val kstreams            = "org.apache.kafka"    % "kafka-streams"            % Version.kafka
-    val kstreamsScala       = "org.apache.kafka"   %% "kafka-streams-scala"      % Version.kafka
-    val kstreamsTestUtils   = "org.apache.kafka"    % "kafka-streams-test-utils" % Version.kafka
-    val kafka               = "org.apache.kafka"   %% "kafka"                    % Version.kafka
-    val kafkaAvroSerializer = "io.confluent"        % "kafka-avro-serializer"    % Version.confluent
-    val circeKafka          = "com.nequissimus"    %% "circe-kafka"              % Version.circeKafka
-    val circeGeneric        = "io.circe"           %% "circe-generic"            % Version.circe
-    val kafkaStreamsCirce   = "com.goyeau"         %% "kafka-streams-circe"      % Version.kafkaStreamsCirce
-    val airframeLog         = "org.wvlet.airframe" %% "airframe-log"             % Version.airframeLog
-    val logback             = "ch.qos.logback"      % "logback-classic"          % Version.logback
-    val log4j               = "log4j"               % "log4j"                    % Version.log4j
-    val slfLog4j            = "org.slf4j"           % "slf4j-log4j12"            % Version.slfLog4j
-    val scalatest           = "org.scalatest"      %% "scalatest"                % Version.scalatest
+    val clients             = "org.apache.kafka"      % "kafka-clients"            % Version.kafka
+    val kstreams            = "org.apache.kafka"      % "kafka-streams"            % Version.kafka
+    val kstreamsScala       = "org.apache.kafka"     %% "kafka-streams-scala"      % Version.kafka
+    val kstreamsTestUtils   = "org.apache.kafka"      % "kafka-streams-test-utils" % Version.kafka
+    val kafka               = "org.apache.kafka"     %% "kafka"                    % Version.kafka
+    val kafkaAvroSerializer = "io.confluent"          % "kafka-avro-serializer"    % Version.confluent
+    val circeKafka          = "com.nequissimus"      %% "circe-kafka"              % Version.circeKafka
+    val circeGeneric        = "io.circe"             %% "circe-generic"            % Version.circe
+    val kafkaStreamsCirce   = "com.goyeau"           %% "kafka-streams-circe"      % Version.kafkaStreamsCirce
+    val betterFiles         = "com.github.pathikrit" %% "better-files"             % Version.betterFiles
+    val config              = "com.typesafe"          % "config"                   % Version.config
+    val scopt               = "com.github.scopt"     %% "scopt"                    % Version.scopt
+    val airframeLog         = "org.wvlet.airframe"   %% "airframe-log"             % Version.airframeLog
+    val logback             = "ch.qos.logback"        % "logback-classic"          % Version.logback
+    val log4j               = "log4j"                 % "log4j"                    % Version.log4j
+    val slfLog4j            = "org.slf4j"             % "slf4j-log4j12"            % Version.slfLog4j
+    val scalatest           = "org.scalatest"        %% "scalatest"                % Version.scalatest
   }
