@@ -8,7 +8,7 @@ inThisBuild(
     organizationName := "ksilin",
     startYear := Some(2021),
     licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0")),
-    scalaVersion := "2.13.4",
+    scalaVersion := "2.13.8",
     scalacOptions ++= Seq(
       "-deprecation",
       "-unchecked",
@@ -82,17 +82,17 @@ lazy val commonSettings =
 lazy val library =
   new {
     object Version {
-      val kafka             = "2.8.0"
-      val confluent         = "6.2.1"
-      val circeKafka        = "2.7.0"
+      val kafka             = "3.1.0"
+      val confluent         = "7.0.1"
+      val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
       val betterFiles       = "3.9.1"
       val config            = "1.4.1"
       val scopt             = "4.0.1"
-      val airframeLog       = "20.12.1"
-      val logback           = "1.2.3"
-      val scalatest         = "3.2.0"
+      val airframeLog       = "22.2.0"
+      val logback           = "1.2.11"
+      val scalatest         = "3.2.11"
       val log4j             = "1.2.17"
       val slfLog4j          = "1.7.30"
     }
