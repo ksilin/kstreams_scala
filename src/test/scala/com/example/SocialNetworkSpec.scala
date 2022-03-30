@@ -274,9 +274,9 @@ class SocialNetworkSpec extends SpecBase {
     outputTopic.readKeyValuesToList().asScala.toList
 
   results foreach { kv =>
-   // val vStr: String = kv.value.asJson.noSpacesSortKeys
+    // val vStr: String = kv.value.asJson.noSpacesSortKeys
     println(s"${kv.value.post.id}: " + kv.value.interactions)
-    }
+  }
 
   //
 //  Id(post1): Interactions(Set(),0)
@@ -300,6 +300,5 @@ class SocialNetworkSpec extends SpecBase {
 //  KeyValue(Id(post1), DenormalisedPost(Post(Id(post1),2021-08-14T14:40:06.209501Z,Id(user1),kcSL4v4xxy,false),User(Id(user1),2021-08-14T14:40:06.209501Z,Vlad Islav,true,false),Interactions(Set(Like(Id(user2),Id(post1),2021-08-14T14:40:06.209501Z,false)),0)))
 //  KeyValue(Id(post1), DenormalisedPost(Post(Id(post1),2021-08-14T14:40:06.209501Z,Id(user1),kcSL4v4xxy,false),User(Id(user1),2021-08-14T14:40:06.209501Z,Vlad Islav,true,false),Interactions(Set(Like(Id(user2),Id(post1),2021-08-14T14:40:06.209501Z,false), Like(Id(user3),Id(post1),2021-08-14T14:40:06.209501Z,false)),0)))
 //  KeyValue(Id(post1), DenormalisedPost(Post(Id(post1),2021-08-14T14:40:06.209501Z,Id(user1),kcSL4v4xxy,false),User(Id(user1),2021-08-14T14:40:06.209501Z,Vlad Islav,true,false),Interactions(Set(Like(Id(user2),Id(post1),2021-08-14T14:40:06.209501Z,false), Like(Id(user3),Id(post1),2021-08-14T14:40:06.209501Z,false)),1)))
-
 
 }

@@ -1,6 +1,6 @@
 package com.example
 
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{ Consumer, ConsumerRecord, ConsumerRecords }
 import wvlet.log.LogSupport
 
 import java.time

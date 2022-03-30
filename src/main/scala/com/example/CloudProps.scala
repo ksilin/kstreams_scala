@@ -3,16 +3,13 @@ package com.example
 import com.typesafe.config.ConfigFactory
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.config.{SaslConfigs, SslConfigs}
+import org.apache.kafka.common.config.{ SaslConfigs, SslConfigs }
 import org.apache.kafka.streams.StreamsConfig
 
 import java.net.URL
 import java.util.Properties
 
-case class CloudProps( bootstrapBroker: String,
-                       apiKey: String,
-                       apiSecret: String
-                     ) {
+case class CloudProps(bootstrapBroker: String, apiKey: String, apiSecret: String) {
 
   val commonProps: Properties = new Properties()
   commonProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBroker)

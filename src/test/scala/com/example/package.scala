@@ -15,7 +15,7 @@ package object example {
       updatedOn: Instant,
       nickname: String,
       verified: Boolean,
-    //  image: Option[URI] = None,
+      //  image: Option[URI] = None,
       deleted: Boolean = false
   )
 
@@ -27,7 +27,12 @@ package object example {
       // image: Option[URI] = None,
       deleted: Boolean = false
   )
-  sealed case class Like(userId: Id[User], postId: Id[Post], updatedOn: Instant, unliked: Boolean = false)
+  sealed case class Like(
+      userId: Id[User],
+      postId: Id[Post],
+      updatedOn: Instant,
+      unliked: Boolean = false
+  )
   sealed case class Comment(
       id: Id[Comment],
       postId: Id[Post],
@@ -39,9 +44,8 @@ package object example {
 
   // read model
   sealed case class DenormalisedPost(post: Post, author: User, interactions: Interactions)
-  sealed case class Interactions(likes: Set[Like], comments: Int){
-  }
-  case object Interactions{
+  sealed case class Interactions(likes: Set[Like], comments: Int) {}
+  case object Interactions {
     final val EMPTY = Interactions(Set.empty, 0)
   }
 

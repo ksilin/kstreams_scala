@@ -4,10 +4,10 @@ import com.example.WordCount.Config
 import io.confluent.common.utils.TestUtils
 import kafka.tools.StreamsResetter
 import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.streams.{KafkaStreams, StreamsConfig, Topology}
+import org.apache.kafka.streams.{ KafkaStreams, StreamsConfig, Topology }
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.scala.kstream.{KStream, KTable, Materialized}
+import org.apache.kafka.streams.scala.kstream.{ KStream, KTable, Materialized }
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import wvlet.log.LogSupport
@@ -40,18 +40,18 @@ object WordCountApp extends App with LogSupport {
   }
 
   val cloudProps: CloudProps = CloudProps.create()
-  val props: Properties = cloudProps.commonProps.clone().asInstanceOf[Properties]
+  val props: Properties      = cloudProps.commonProps.clone().asInstanceOf[Properties]
   val fallBackConfig: Config = Config()
 
-  val config: Config = OParser.parse(parser, args, fallBackConfig)  match {
+  val config: Config = OParser.parse(parser, args, fallBackConfig) match {
     case Some(config) => config
     case _ =>
       warn(s"failed to parse arguments, using fallback config: $fallBackConfig ")
       fallBackConfig
   }
 
-  val streamsProps: Properties = new Properties()
-  private val suiteName1: String       = appName
+  val streamsProps: Properties   = new Properties()
+  private val suiteName1: String = appName
   streamsProps.put(StreamsConfig.APPLICATION_ID_CONFIG, suiteName1)
   streamsProps.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass)
   streamsProps.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass)
@@ -68,7 +68,6 @@ object WordCountApp extends App with LogSupport {
     StreamsConfig.COMMIT_INTERVAL_MS_CONFIG,
     0
   ) // pipe events through immediately
-
 
   val fullProps: Properties = new Properties()
   fullProps.putAll(props)
@@ -90,7 +89,7 @@ object WordCountApp extends App with LogSupport {
 
   sys.addShutdownHook(streams.close())
 
-  def setupTopics(adminClient: AdminClient, config: Config ): Unit ={
+  def setupTopics(adminClient: AdminClient, config: Config): Unit = {
 
     // StreamsResetter.main()
     TopicHelper.deleteTopicsByPrefix(adminClient, appName)

@@ -11,9 +11,6 @@ class WordCountSimpleSpec extends SpecBase {
   val wordInputTopicName  = "inputTopic"
   val wordOutputTopicName = "outputTopic"
 
-  val translationInputTopic  = "translationInputTopic"
-  val translationOutputTopic = "translationOutputTopic"
-
   val inputValues = List(
     "Hello Kafka Streams",
     "All streams lead to Kafka",
@@ -39,7 +36,8 @@ class WordCountSimpleSpec extends SpecBase {
 
   "must count words across messages in topic" in {
 
-    val topology: Topology = WordCount.createTopology(builder, wordInputTopicName, wordOutputTopicName)
+    val topology: Topology =
+      WordCount.createTopology(builder, wordInputTopicName, wordOutputTopicName)
     info(topology.describe())
 
     val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)

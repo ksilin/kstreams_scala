@@ -1,6 +1,6 @@
 package com.example
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ Future, Promise }
 import scala.util.Try
 
 trait FutureConverter {
