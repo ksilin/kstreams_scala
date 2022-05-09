@@ -19,7 +19,8 @@ object WordCount {
     val textLines: KStream[Int, String] =
       builder.stream(inputTopic) //(Consumed.`with`(Serdes.Integer(), Serdes.String()))
 
-    val wordCounts: KTable[String, Long] = textLines.peek((k, v) => println(s"processing $k : $v"))
+    val wordCounts: KTable[String, Long] = textLines
+      .peek((k, v) => println(s"processing $k : $v"))
       .flatMapValues((v: String) => List.from(wordPattern.split(v.toLowerCase)))
       // no need to specify explicit serdes because the resulting key and value types match our default serde settings
       .groupBy((_: Int, word: String) => word) //(Grouped.`with`(Serdes.Integer(), Serdes.String()))

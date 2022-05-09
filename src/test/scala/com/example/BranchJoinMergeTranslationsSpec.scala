@@ -105,9 +105,13 @@ class BranchJoinMergeTranslationsSpec extends SpecBase {
       inputWordsBranchOffCyrillicUnicodeBlock.defaultBranch(Branched.as(englishBranch))
 
     val joinedEn: KStream[String, String] =
-      inputWordsNameDefaultBranch(translationBranchPrefix + englishBranch).leftJoin(translationsEnTable)((_, r) => r)
+      inputWordsNameDefaultBranch(translationBranchPrefix + englishBranch).leftJoin(
+        translationsEnTable
+      )((_, r) => r)
     val joinedRu: KStream[String, String] =
-      inputWordsNameDefaultBranch(translationBranchPrefix + russianBranch).leftJoin(translationsRuTable)((_, r) => r)
+      inputWordsNameDefaultBranch(translationBranchPrefix + russianBranch).leftJoin(
+        translationsRuTable
+      )((_, r) => r)
 
     val merged: KStream[String, String] = joinedEn.merge(joinedRu)
     merged.to(translationOutputTopicName)
@@ -144,8 +148,12 @@ class BranchJoinMergeTranslationsSpec extends SpecBase {
       )
 
     // insert test data
-    translationsEn.foreach { case (k: String, v: String) => translationInputTopicEn.pipeInput(k, v) }
-    translationsRu.foreach { case (k: String, v: String) => translationInputTopicRu.pipeInput(k, v) }
+    translationsEn.foreach { case (k: String, v: String) =>
+      translationInputTopicEn.pipeInput(k, v)
+    }
+    translationsRu.foreach { case (k: String, v: String) =>
+      translationInputTopicRu.pipeInput(k, v)
+    }
     inputTopic.pipeValueList(inputValues.asJava)
 
     val outputRecords: mutable.Map[String, String] =

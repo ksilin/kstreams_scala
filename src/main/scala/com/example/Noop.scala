@@ -3,7 +3,7 @@ package com.example
 import org.apache.kafka.streams.Topology
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.scala.kstream.{KStream, KTable}
+import org.apache.kafka.streams.scala.kstream.{ KStream, KTable }
 import org.apache.kafka.streams.scala.serialization.Serdes._
 
 object Noop {
