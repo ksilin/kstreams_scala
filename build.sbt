@@ -6,6 +6,8 @@ inThisBuild(
   Seq(
     organization := "example.com",
     organizationName := "ksilin",
+    version := "0.1.0-SNAPSHOT",
+    versionScheme := Some("semver-spec"),
     startYear := Some(2021),
     licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0")),
     scalaVersion := "2.13.8",
@@ -29,9 +31,38 @@ inThisBuild(
       Resolver.mavenLocal
     ),
     scalafmtOnCompile := true,
-    dynverSeparator := "_", // the default `+` is not compatible with docker tags
+    dynverSeparator := "_", // the default `+` is not compatible with docker tags,
   )
 )
+
+enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging, JibPlugin)
+
+jibBaseImage := "openjdk:11-jre"
+// jibName := "jibApp"
+jibTags := List("v" + version.value)
+jibUseCurrentTimestamp := true
+
+docker / dockerfile := {
+  val appDir: File = stage.value
+  val targetDir    = "/app"
+
+  new Dockerfile {
+    from("openjdk:11-jre")
+    entryPoint(s"$targetDir/bin/${executableScriptName.value}")
+    copy(appDir, targetDir, chown = "daemon:daemon")
+  }
+}
+
+docker / imageNames := Seq(
+  ImageName(
+    namespace = Some("docker.io"), //organization.value),
+    repository = "kostja/ksilin",  //name.value,
+    tag = Some("v" + version.value)
+  )
+)
+
+// we dont have no mappings
+// Docker / mappings := mappings.value
 
 // *****************************************************************************
 // Projects
@@ -45,11 +76,14 @@ lazy val kstreams_scala =
       libraryDependencies ++= Seq(
         library.kafka,
         library.kstreams,
+        library.kstreamsAvroSerde,
         library.kstreamsScala,
         library.kstreamsTestUtils,
         library.kafkaAvroSerializer,
         library.circeKafka,
         library.kafkaStreamsCirce,
+        library.gson,
+        library.ksqlDbTestUtil,
         library.betterFiles,
         library.config,
         library.scopt,
@@ -87,6 +121,7 @@ lazy val library =
       val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
+      val gson = "2.9.0"
       val betterFiles       = "3.9.1"
       val config            = "1.4.1"
       val scopt             = "4.0.1"
@@ -98,13 +133,16 @@ lazy val library =
     }
     val clients             = "org.apache.kafka"      % "kafka-clients"            % Version.kafka
     val kstreams            = "org.apache.kafka"      % "kafka-streams"            % Version.kafka
+    val kstreamsAvroSerde   = "io.confluent"          % "kafka-streams-avro-serde" % Version.confluent
     val kstreamsScala       = "org.apache.kafka"     %% "kafka-streams-scala"      % Version.kafka
     val kstreamsTestUtils   = "org.apache.kafka"      % "kafka-streams-test-utils" % Version.kafka
     val kafka               = "org.apache.kafka"     %% "kafka"                    % Version.kafka
     val kafkaAvroSerializer = "io.confluent"          % "kafka-avro-serializer"    % Version.confluent
     val circeKafka          = "com.nequissimus"      %% "circe-kafka"              % Version.circeKafka
     val circeGeneric        = "io.circe"             %% "circe-generic"            % Version.circe
+    val gson  = "com.google.code.gson" % "gson" % Version.gson
     val kafkaStreamsCirce   = "com.goyeau"           %% "kafka-streams-circe"      % Version.kafkaStreamsCirce
+    val ksqlDbTestUtil      = "io.confluent.ksql"     % "ksqldb-test-util"         % Version.confluent
     val betterFiles         = "com.github.pathikrit" %% "better-files"             % Version.betterFiles
     val config              = "com.typesafe"          % "config"                   % Version.config
     val scopt               = "com.github.scopt"     %% "scopt"                    % Version.scopt

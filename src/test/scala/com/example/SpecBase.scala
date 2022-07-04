@@ -15,7 +15,7 @@ class SpecBase extends AnyFreeSpecLike with LogSupport with Matchers {
   val streamsConfiguration: Properties = new Properties()
   private val suiteName1: String       = this.suiteName
   streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, suiteName1)
-  streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy config")
+  streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "DUMMY_CONFIG")
   streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
   streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
   // Use a temporary directory for storing state, which will be automatically removed after the test.

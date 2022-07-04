@@ -1,18 +1,18 @@
-package com.example
+package com.example.json
 
-import org.apache.kafka.common.serialization.{ Deserializer, Serdes }
+import com.example.{ SpecBase, Translation }
+import com.goyeau.kafka.streams.circe.CirceSerdes
+import com.goyeau.kafka.streams.circe.CirceSerdes._
+import io.circe.generic.auto._
+import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream.{ KStream, KTable }
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.{ TestInputTopic, TestOutputTopic, Topology, TopologyTestDriver }
 
-import java.util.regex.Pattern
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-
-import com.goyeau.kafka.streams.circe.CirceSerdes
-import io.circe.generic.auto._
-import com.goyeau.kafka.streams.circe.CirceSerdes._
+import TestData._
 
 class KafkaStreamsCirceGenericSerdeSpec extends SpecBase {
 
@@ -20,30 +20,6 @@ class KafkaStreamsCirceGenericSerdeSpec extends SpecBase {
 
   val translationInputTopicName  = "translationsInputTopic"
   val translationOutputTopicName = "translationOutputTopic"
-
-  val inputValues = List(
-    "this is the end",
-  )
-
-  val wordPattern: Pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
-
-  val translationsEn: List[(String, String)] = List(
-    ("this", "dies"),
-    ("this", "es"),
-    ("the", "der"),
-    ("the", "die"),
-    ("the", "das"),
-    ("is", "ist"),
-    ("end", "ende"),
-    ("end", "schluss"),
-  )
-
-  val expectedTranslations = Map(
-    "the"  -> Translation("the", Set("der", "die", "das")),
-    "this" -> Translation("this", Set("dies", "es")),
-    "is"   -> Translation("is", Set("ist")),
-    "end"  -> Translation("end", Set("ende", "schluss"))
-  )
 
   "must translate from english & russian to german" in {
 
