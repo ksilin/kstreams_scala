@@ -73,7 +73,7 @@ class TtlTransformerExtractorSpec extends SpecBase {
 
   "remove oldest record after TTL expires - tested with MockProcessorContext" in {
 
-    val  context: MockProcessorContext = new MockProcessorContext()
+    val  context: MockProcessorContext = new MockProcessorContext//[Int, MyRecord] = new MockProcessorContext()
     val store:  KeyValueStore[Integer, MyRecord] =
       Stores.keyValueStoreBuilder(
         Stores.inMemoryKeyValueStore(storeName),
@@ -81,11 +81,13 @@ class TtlTransformerExtractorSpec extends SpecBase {
         myRecordSerde
       )
         .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
-        .build();
-    store.init(context, store);
-    // TODO - deprecated - use StateStoreContext
-    //store.init(context, store);
-    context.register(store, /*parameter unused in mock*/ null);
+        .build()
+    // val stateSToreCtx = context.getStateStoreContext
+    // store.init(stateSToreCtx, store)
+    // deprecated - use StateStoreContext after 3.3 is out
+    store.init(context, store)
+    context.register(store, null)
+    //context.addStateStore(store)
 
     val transformer: TTLTransformerExtractor[Int, MyRecord] = new TTLTransformerExtractor[Int, MyRecord](punctuationInterval, ttl, tsExtractor, storeName)
     transformer.init(context)

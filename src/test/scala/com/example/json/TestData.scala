@@ -6,7 +6,7 @@ import java.util.regex.Pattern
 
 case object TestData{
 
-  val inputValues = List(
+  val textLines = List(
     "this is the end",
   )
 

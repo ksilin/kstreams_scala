@@ -29,11 +29,11 @@ class CirceKafkaGenericSerdeSpec extends SpecBase {
 
     // --- topo
 
-    val textLines: KStream[Int, String] = builder.stream(wordInputTopicName)
+    val textLineStream: KStream[Int, String] = builder.stream(wordInputTopicName)
 
     val translations: KStream[String, String] = builder.stream(translationInputTopicName)
 
-    val wordSplit: KStream[String, String] = textLines
+    val wordSplit: KStream[String, String] = textLineStream
       .flatMap { (_, v: String) =>
         val words = wordPattern.split(v.toLowerCase)
         List.from(words).map(w => (w, w))
@@ -80,7 +80,7 @@ class CirceKafkaGenericSerdeSpec extends SpecBase {
     translationsEn.foreach { case (k: String, v: String) =>
       translationInputTopicEn.pipeInput(k, v)
     }
-    inputTopic.pipeValueList(inputValues.asJava)
+    inputTopic.pipeValueList(textLines.asJava)
 
     val outputRecords: mutable.Map[String, Translation] =
       translationOutputTopic.readKeyValuesToMap().asScala

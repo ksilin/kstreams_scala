@@ -23,10 +23,28 @@ class KafkaStreamsCirceGenericSerdeSpec extends SpecBase {
 
   "must translate from english & russian to german" in {
 
-    // --- topo
+    val topology = makeTopology()
+    info(topology.describe())
 
-    val textLines: KStream[Int, String] = builder.stream(wordInputTopicName)
+    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
 
+    val (inputTopic, translationInputTopicEn, translationOutputTopic) =
+      createTestTopics(topologyTestDriver)
+
+    translationsEn.foreach { case (k: String, v: String) =>
+      translationInputTopicEn.pipeInput(k, v)
+    }
+    inputTopic.pipeValueList(textLines.asJava)
+
+    val outputRecords: mutable.Map[String, Translation] =
+      translationOutputTopic.readKeyValuesToMap().asScala
+
+    outputRecords must contain theSameElementsAs expectedTranslations
+  }
+
+  def makeTopology(): Topology = {
+
+    val textLines: KStream[Int, String]       = builder.stream(wordInputTopicName)
     val translations: KStream[String, String] = builder.stream(translationInputTopicName)
 
     val wordSplit: KStream[String, String] = textLines
@@ -47,13 +65,14 @@ class KafkaStreamsCirceGenericSerdeSpec extends SpecBase {
 
     joined.to(translationOutputTopicName)
 
-    // --- topo
+    builder.build()
+  }
 
-    val topology: Topology = builder.build()
-    info(topology.describe())
-
-    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
-
+  def createTestTopics(topologyTestDriver: TopologyTestDriver): (
+      TestInputTopic[Integer, String],
+      TestInputTopic[String, String],
+      TestOutputTopic[String, Translation]
+  ) = {
     val inputTopic: TestInputTopic[Integer, String] = topologyTestDriver.createInputTopic(
       wordInputTopicName,
       Serdes.Integer().serializer(),
@@ -66,23 +85,15 @@ class KafkaStreamsCirceGenericSerdeSpec extends SpecBase {
         Serdes.String().serializer()
       )
 
-    val translationOutputTopic: TestOutputTopic[String, Translation] =
+    val translationOutputTopic: TestOutputTopic[String, Translation] = {
       topologyTestDriver.createOutputTopic(
         translationOutputTopicName,
         Serdes.String().deserializer(),
         // Needs an Decoder, can be provided by importing io.circe.generic.auto._
         CirceSerdes.deserializer[Translation]
       )
-
-    translationsEn.foreach { case (k: String, v: String) =>
-      translationInputTopicEn.pipeInput(k, v)
     }
-    inputTopic.pipeValueList(inputValues.asJava)
-
-    val outputRecords: mutable.Map[String, Translation] =
-      translationOutputTopic.readKeyValuesToMap().asScala
-
-    outputRecords must contain theSameElementsAs expectedTranslations
+    (inputTopic, translationInputTopicEn, translationOutputTopic)
   }
 
 }

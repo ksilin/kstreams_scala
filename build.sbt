@@ -28,6 +28,7 @@ inThisBuild(
       Resolver.bintrayRepo("wolfendale", "maven"),
       Resolver.bintrayRepo("ovotech", "maven"),
       "mulesoft" at "https://repository.mulesoft.org/nexus/content/repositories/public/",
+      "jitpack" at "https://jitpack.io",
       Resolver.mavenLocal
     ),
     scalafmtOnCompile := true,
@@ -90,8 +91,10 @@ lazy val kstreams_scala =
         library.circeGeneric,
         library.airframeLog,
         library.logback,
+        library.testcontainers,
         // library.log4j,
         // library.slfLog4j  % Test,
+        library.kstreams % Test,
         library.scalatest % Test
       ),
     )
@@ -116,12 +119,13 @@ lazy val commonSettings =
 lazy val library =
   new {
     object Version {
-      val kafka             = "3.1.0"
-      val confluent         = "7.0.1"
+      val kafka             = "3.1.1"
+      val confluent         = "7.1.2"
       val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
       val gson = "2.9.0"
+      val testContainers = "0.2.1"
       val betterFiles       = "3.9.1"
       val config            = "1.4.1"
       val scopt             = "4.0.1"
@@ -150,5 +154,7 @@ lazy val library =
     val logback             = "ch.qos.logback"        % "logback-classic"          % Version.logback
     val log4j               = "log4j"                 % "log4j"                    % Version.log4j
     val slfLog4j            = "org.slf4j"             % "slf4j-log4j12"            % Version.slfLog4j
+    val testcontainers =
+      "com.github.christophschubert" % "cp-testcontainers" % Version.testContainers
     val scalatest           = "org.scalatest"        %% "scalatest"                % Version.scalatest
   }
