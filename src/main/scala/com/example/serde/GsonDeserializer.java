@@ -31,8 +31,10 @@ public class GsonDeserializer<T> implements Deserializer<T> {
         if(bytes == null){
             return null;
         }
-
-        return gson.fromJson(new String(bytes),deserializedClass);
+        String json = new String(bytes);
+        System.out.println("json: ");
+        System.out.println(json);
+        return gson.fromJson(json,deserializedClass);
     }
 
     @Override
