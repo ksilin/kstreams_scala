@@ -19,7 +19,7 @@ import java.time.Duration
 import java.{lang, util}
 import _root_.scala.jdk.CollectionConverters._
 
-class TtlTransformerExtractorSpec extends SpecBase {
+class TtlExtractorCleanerStoreSpec extends SpecBase {
 
   case class MyRecord(name: String, description: String, timestamp: lang.Long)
 
@@ -89,7 +89,7 @@ class TtlTransformerExtractorSpec extends SpecBase {
     context.register(store, null)
     //context.addStateStore(store)
 
-    val transformer: TTLTransformerExtractor[Int, MyRecord] = new TTLTransformerExtractor[Int, MyRecord](punctuationInterval, ttl, tsExtractor, storeName)
+    val transformer: TTLExtractorStoreCleaner[Int, MyRecord] = new TTLExtractorStoreCleaner[Int, MyRecord](punctuationInterval, ttl, tsExtractor, storeName)
     transformer.init(context)
 
       store.putAll(data.toList.asJava)
@@ -116,7 +116,7 @@ class TtlTransformerExtractorSpec extends SpecBase {
       builder.stream(inputTopic)(Consumed.`with`(intSerde, myRecordSerde)) //(Consumed.`with`(Serdes.Integer(), Serdes.Long()))
 
     val storeTransformSupplier: TransformerSupplier[Int, MyRecord, KeyValue[Int, MyRecord]] = () => Transformers.storeTransformer(storeName)//.(punctuationInterval, ttl, tsExtractor, storeName)
-    val ttlTransformSupplier: TransformerSupplier[Int, MyRecord, KeyValue[Int, MyRecord]] = () => TTLTransformerExtractor(punctuationInterval, ttl, tsExtractor, storeName)
+    val ttlTransformSupplier: TransformerSupplier[Int, MyRecord, KeyValue[Int, MyRecord]] = () => TTLExtractorStoreCleaner(punctuationInterval, ttl, tsExtractor, storeName)
     val stored = input.transform(storeTransformSupplier, storeName)
     val transformed: KStream[Int, MyRecord] = stored.transform(ttlTransformSupplier, storeName)
     transformed.to(outputTopic)(Produced.`with`(intSerde, myRecordSerde))

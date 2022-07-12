@@ -32,8 +32,8 @@ public class GsonDeserializer<T> implements Deserializer<T> {
             return null;
         }
         String json = new String(bytes);
-        System.out.println("json: ");
-        System.out.println(json);
+        //System.out.println("json: ");
+        //System.out.println(json);
         return gson.fromJson(json,deserializedClass);
     }
 

@@ -11,7 +11,7 @@ import java.lang
 import java.time.Duration
 import _root_.scala.jdk.CollectionConverters._
 
-case class TTLTransformerExtractor[K, V](
+case class TTLExtractorStoreCleaner[K, V](
     punctuateInterval: Duration,
     ttl: lang.Long,
     timestampExtractor: V => lang.Long,
@@ -25,7 +25,7 @@ case class TTLTransformerExtractor[K, V](
   var cancellablePunctuator: Cancellable = _
 
   override def init(context: ProcessorContext): Unit = {
-    logger.debug(s"initializing transformer with $ctx")
+    logger.debug(s"initializing transformer with $context")
     ctx = context
     store = ctx.getStateStore(storeName)
     logger.debug(s"transformer retrieved store $store")
