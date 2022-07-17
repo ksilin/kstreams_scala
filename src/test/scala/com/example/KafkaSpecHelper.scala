@@ -24,12 +24,12 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
   val defaultReplicationFactor = 3 // 3 for cloud, 1 for local would make sense
 
   def createTopic(
-                   adminClient: AdminClient,
-                   topicName: String,
-                   numberOfPartitions: Int = 1,
-                   replicationFactor: Short = 3,
-                   skipExistanceCheck: Boolean = false
-                 ): Either[String, String] = {
+      adminClient: AdminClient,
+      topicName: String,
+      numberOfPartitions: Int = 1,
+      replicationFactor: Short = 3,
+      skipExistanceCheck: Boolean = false
+  ): Either[String, String] = {
     val needsCreation = skipExistanceCheck || !doesTopicExist(adminClient, topicName)
     if (needsCreation) {
       debug(s"Creating topic ${topicName}")
@@ -58,11 +58,11 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
   }
 
   def createOrTruncateTopic(
-                             adminClient: AdminClient,
-                             topicName: String,
-                             numberOfPartitions: Int = 1,
-                             replicationFactor: Short = 3
-                           ): Any =
+      adminClient: AdminClient,
+      topicName: String,
+      numberOfPartitions: Int = 1,
+      replicationFactor: Short = 3
+  ): Any =
     if (doesTopicExist(adminClient, topicName)) {
       println(s"truncating topic $topicName")
       truncateTopic(adminClient, topicName, numberOfPartitions, replicationFactor)
@@ -142,18 +142,23 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
 
   // assumes consumer is already subscribed
   def fetchAndProcessRecords[K, V](
-                                    consumer: Consumer[K, V],
-                                    process: ConsumerRecord[K, V] => Unit = { r: ConsumerRecord[K, V] =>
-                                      info(
-                                        s"${r.topic()} | ${r.partition()} | ${r.offset()} : ${r.value().getClass} | ${r
-                                          .key()} | ${r.value()}"
-                                      )
-                                    },
-                                    filter: ConsumerRecord[K, V] => Boolean = { _: ConsumerRecord[K, V] => true },
-                                    abortOnFirstRecord: Boolean = true,
-                                    maxAttempts: Int = 100,
-                                    pause: Int = 100
-                                  ): Iterable[ConsumerRecord[K, V]] = {
+      consumer: Consumer[K, V],
+      process: ConsumerRecord[K, V] => Unit = { r: ConsumerRecord[K, V] =>
+        if (r.value() == null) {
+          info(s"tombstone for key ${r.key()}")
+        } else {
+
+          info(
+            s"${r.topic()} | ${r.partition()} | ${r.offset()} : ${r.value().getClass} | ${r
+              .key()} | ${r.value()}"
+          )
+        }
+      },
+      filter: ConsumerRecord[K, V] => Boolean = { _: ConsumerRecord[K, V] => true },
+      abortOnFirstRecord: Boolean = true,
+      maxAttempts: Int = 100,
+      pause: Int = 100
+  ): Iterable[ConsumerRecord[K, V]] = {
     val duration: time.Duration                    = java.time.Duration.ofMillis(100)
     var found                                      = false
     var records: Iterable[ConsumerRecord[K, V]]    = Nil
