@@ -38,7 +38,7 @@ inThisBuild(
 
 enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging, JibPlugin)
 
-jibBaseImage := "openjdk:11-jre"
+jibBaseImage := "eclipse-temurin:17-jre"
 // jibName := "jibApp"
 jibTags := List("v" + version.value)
 jibUseCurrentTimestamp := true
@@ -48,7 +48,7 @@ docker / dockerfile := {
   val targetDir    = "/app"
 
   new Dockerfile {
-    from("openjdk:11-jre")
+    from("eclipse-temurin:17-jre")
     entryPoint(s"$targetDir/bin/${executableScriptName.value}")
     copy(appDir, targetDir, chown = "daemon:daemon")
   }
