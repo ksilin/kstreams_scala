@@ -2,7 +2,6 @@ package com.example
 
 import io.confluent.common.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.StreamsConfig
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.scalatest.freespec.AnyFreeSpecLike

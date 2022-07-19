@@ -112,12 +112,12 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
 
     val flatMapped: KStream[String, ParcelEvent] = parcelEventStream.flatMapValues((k, pe) =>
       if (pe.event == DELETED) {
-        info(s"flatMap: producing a tombstone after the delete event for key ${k}")
+        info(s"flatMap: producing a tombstone after the delete event for key $k")
         List(pe, null.asInstanceOf[ParcelEvent])
       } else List(pe)
     )
 
-    val peeked = flatMapped.peek((k, v) => s"after flatMap ${k}, $v to $outputTopicName")
+    val peeked = flatMapped.peek((k, v) => s"after flatMap $k, $v to $outputTopicName")
     val parcelTable: KTable[String, ParcelEvent] = peeked.toTable(
       Named.as("parcelEventTable"),
       Materialized.`with`(Serdes.stringSerde, parcelSerde)
@@ -147,7 +147,7 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
       Materialized.`with`(Serdes.stringSerde, parcelSerde)
     )
     addressAndParcel.toStream
-      .peek((k, v) => info(s"writing ${k}, $v to $outputTopicName"))
+      .peek((k, v) => info(s"writing $k, $v to $outputTopicName"))
       .to(outputTopicName)(Produced.`with`(Serdes.stringSerde, parcelSerde))
 
     builder.build()
