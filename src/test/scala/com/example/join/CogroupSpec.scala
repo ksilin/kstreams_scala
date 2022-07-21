@@ -62,11 +62,9 @@ class CogroupSpec extends SpecBase {
 
   private val adminClient: AdminClient = AdminClient.create(streamsConfiguration)
 
-  private val storeName = "cogroupStore"
-
   private val customerIds: List[String] = List("Shaun Shopper", "Berta Buyer", "Peter Purchaser")
 
-  private val lineItems: Seq[LineItem] = (1 to 20) map { _ =>
+  private val lineItems: Seq[LineItem] = (1 to 5) map { _ =>
     LineItem(Random.alphanumeric.take(3).mkString, Random.alphanumeric.take(7).mkString)
   }
 
@@ -76,31 +74,12 @@ class CogroupSpec extends SpecBase {
     KafkaSpecHelper.createTopic(adminClient, wishlistInputTopicName, 1, 1)
     KafkaSpecHelper.createTopic(adminClient, cartInputTopicName, 1, 1)
 
-    val lineItemProducer = new KafkaProducer[String, LineItem](
-      streamsConfiguration,
-      Serdes.stringSerde.serializer(),
-      itemSerializer
-    )
-
-    lineItems foreach { item =>
-      val topic    = Random.shuffle(topics).head
-      val customer = Random.shuffle(customerIds).head
-      info(s"producing $topic record for customer $customer: $item")
-      val record = new ProducerRecord[String, LineItem](topic, customer, item)
-      lineItemProducer.send(record).get()
-    }
+    produceTestData
 
     val topology = makeTopology()
     println(topology.describe())
     val streams = new KafkaStreams(topology, streamsConfiguration)
     streams.start()
-
-//    val metrics: util.Map[MetricName, _ <: Metric] = streams.metrics()
-//    info("metrics: ")
-//    metrics.asScala foreach { case (k, m) =>
-//      info(k)
-//      info(m)
-//    }
 
     val consumer = new KafkaConsumer[String, Customer](
       streamsConfiguration,
@@ -108,9 +87,25 @@ class CogroupSpec extends SpecBase {
       implicitly[Deserializer[Customer]]
     )
     consumer.subscribe(List(customerOutputTopicName).asJavaCollection)
-    KafkaSpecHelper.fetchAndProcessRecords(consumer)
+    KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, maxAttempts = 10, abortOnFirstRecord = false)
 
     streams.close()
+  }
+
+  private def produceTestData = {
+    val lineItemProducer = new KafkaProducer[String, LineItem](
+      streamsConfiguration,
+      Serdes.stringSerde.serializer(),
+      itemSerializer
+    )
+
+    lineItems foreach { item =>
+      val topic = Random.shuffle(topics).head
+      val customer = Random.shuffle(customerIds).head
+      info(s"producing $topic record for customer $customer: $item")
+      val record = new ProducerRecord[String, LineItem](topic, customer, item)
+      lineItemProducer.send(record).get()
+    }
   }
 
   def makeTopology(): Topology = {

@@ -3,6 +3,7 @@ package com.example.statestore
 import com.example.SpecBase
 import com.example.punctuate.Transformers
 import com.example.serde.{GsonDeserializer, GsonSerializer}
+import com.google.gson.annotations.JsonAdapter
 import org.apache.kafka.common.serialization.Serdes.WrapperSerde
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.TransformerSupplier

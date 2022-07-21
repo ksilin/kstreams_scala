@@ -52,8 +52,8 @@ object Transformers extends LocalLogSupport {
     }
   }
 
-  def createCtxAwareValueTransformer[K, V](fun: (K, V, ProcessorContext) => KeyValue[K, V]): ValueTransformerWithKey[K, V, KeyValue[K, V]] = {
-    new ValueTransformerWithKey[K, V, KeyValue[K, V]] {
+  def createCtxAwareValueTransformer[K, V, R](fun: (K, V, ProcessorContext) => R): ValueTransformerWithKey[K, V, R] = {
+    new ValueTransformerWithKey[K, V, R] {
 
       var ctx: ProcessorContext = _
 
@@ -61,7 +61,7 @@ object Transformers extends LocalLogSupport {
         ctx = context
       }
 
-      override def transform(key: K, value: V): KeyValue[K, V] = fun(key, value, ctx)
+      override def transform(key: K, value: V): R = fun(key, value, ctx)
 
       override def close(): Unit = {}
     }
@@ -71,19 +71,25 @@ object Transformers extends LocalLogSupport {
 
   def timeLoggingTransformer[K, V](name: String): Transformer[K, V, KeyValue[K, V]] = createCtxAwareTransformer((k, v, ctx) => {
     info(s"$name: processing $k : $v")
-    info(s"wallclock: ${df.format(ctx.currentSystemTimeMs())}")
-    info(s"stream:    ${df.format(ctx.currentStreamTimeMs())}")
-    info(s"record ts: ${df.format(ctx.timestamp())}")
+    logCtx(ctx)
     KeyValue.pair(k, v)
   })
 
-  def timeLoggingValueTransformer[K, V](name: String): ValueTransformerWithKey[K, V, KeyValue[K, V]] = createCtxAwareValueTransformer((k, v, ctx) => {
+  def timeLoggingValueTransformer[K, V](name: String): ValueTransformerWithKey[K, V, V] = createCtxAwareValueTransformer((k, v, ctx) => {
     info(s"$name: processing $k : $v")
+    logCtx(ctx)
+    v
+  })
+
+  def logCtx(ctx: ProcessorContext) = {
+    info(s"taskId: ${ctx.taskId()}")
+    info(s"topic: ${ctx.topic()}")
+    info(s"partition: ${ctx.partition()}")
+    info(s"offset: ${ctx.offset()}")
     info(s"wallclock: ${df.format(ctx.currentSystemTimeMs())}")
     info(s"stream:    ${df.format(ctx.currentStreamTimeMs())}")
     info(s"record ts: ${df.format(ctx.timestamp())}")
-    KeyValue.pair(k, v)
-  })
+  }
 
 
   def storeTransformer[K, V](storeName: String): Transformer[K, V, KeyValue[K, V]] = {

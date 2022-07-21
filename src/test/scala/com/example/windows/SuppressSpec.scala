@@ -1,5 +1,6 @@
 package com.example.windows
 
+import com.example.punctuate.Transformers.{timeLoggingTransformer, timeLoggingValueTransformer}
 import com.example.{KafkaSpecHelper, SpecBase}
 import io.circe.generic.auto._
 import nequi.circe.kafka._
@@ -73,7 +74,7 @@ class SuppressSpec extends SpecBase {
     }
 
 
-    "1 parcel id, 2 records" in {
+    "1 parcel id, 2 records, then out-of-order data with same id" in {
 
       KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
       KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
@@ -82,7 +83,41 @@ class SuppressSpec extends SpecBase {
       streams.cleanUp()
       streams.start()
 
+      val time1 = System.currentTimeMillis()
+
       produceTestData(parcelIds.take(1), 2)
+
+      info("producing out-of-order data")
+      // late data
+      produceTestData(parcelIds.take(1), 2, time1 - 100000)
+
+      val consumer = new KafkaConsumer[String, Parcel](
+        streamsConfiguration,
+        Serdes.stringSerde.deserializer(),
+        parcelDeserializer
+      )
+      consumer.subscribe(List(outputTopicName).asJavaCollection)
+      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, abortOnFirstRecord = false, maxAttempts = 10)
+
+      streams.close()
+    }
+
+    "1 parcel id, 2 records, then late data with same id" in {
+
+      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
+      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
+
+      val streams = new KafkaStreams(topology, streamsConfiguration)
+      streams.cleanUp()
+      streams.start()
+
+      val time1 = System.currentTimeMillis()
+
+      produceTestData(parcelIds.take(1), 2)
+
+      info("producing late data")
+      // late data
+      produceTestData(parcelIds.take(1), 2, time1 + 100000)
 
       val consumer = new KafkaConsumer[String, Parcel](
         streamsConfiguration,
@@ -170,7 +205,9 @@ class SuppressSpec extends SpecBase {
       streams.cleanUp()
       streams.start()
 
-      produceTestData(parcelIds.take(2), 3)
+      val time1 = System.currentTimeMillis()
+
+      produceTestData(parcelIds.take(2), 3, time1)
 
       val consumer = new KafkaConsumer[String, Parcel](
         streamsConfiguration,
@@ -185,7 +222,7 @@ class SuppressSpec extends SpecBase {
 
   }
 
-  private def produceTestData(parcelIds: List[String], recordsPerId: Int = 1): Unit = {
+  private def produceTestData(parcelIds: List[String], recordsPerId: Int = 1, initTime: Long = System.currentTimeMillis()): Unit = {
 
     val parcelCreatedProducer = new KafkaProducer[String, Parcel](
       streamsConfiguration,
@@ -196,7 +233,7 @@ class SuppressSpec extends SpecBase {
     parcelIds.zipWithIndex foreach { case (id, i) =>
       // make more to actually reduce
       (1 to recordsPerId) foreach { j =>
-        val now = System.currentTimeMillis() + i * 1000 + (Math.pow(2, j)*1000).toLong
+        val now = initTime + i * 1000 + (Math.pow(2, j)*1000).toLong
         val parcel = Parcel(id, List(Random.alphanumeric.take(3).mkString), now, now)
         val sent: RecordMetadata = parcelCreatedProducer.send(new ProducerRecord[String, Parcel](parcelInputTopicName, null, now, id, parcel))
           .get()
@@ -205,13 +242,18 @@ class SuppressSpec extends SpecBase {
     }
   }
 
+
   def makeTopology(): Topology = {
+
+    // different flavors of Suppressed yield same results
+    val suppressedUntilWindowClosesUnbounded: Suppressed[Windowed[_]] = Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())
+    val suppressedUntilTimeLimit: Suppressed[Windowed[String]] = Suppressed.untilTimeLimit(Duration.ofSeconds(1), Suppressed.BufferConfig.maxRecords(1))
 
     val parcelStream: KStream[String, Parcel] = builder.stream(parcelInputTopicName)(
       Consumed.`with`(Serdes.stringSerde, parcelSerde).withName("parcelInput")
     )
 
-    //parcelStream.transform(() => timeLoggingTransformer[String, Parcel]("parcelStream"))
+    // val t = parcelStream.transform(() => timeLoggingTransformer[String, Parcel]("parcelStream"))
 
     val groupedParcels: KGroupedStream[String, Parcel] = parcelStream.groupByKey(
       Grouped.`with`(Serdes.stringSerde, parcelSerde).withName("groupedParcels")
@@ -227,13 +269,9 @@ class SuppressSpec extends SpecBase {
     }
     )(Materialized.as(storeName)(Serdes.stringSerde, parcelSerde))
 
-//    reduced.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("reducedParcels"))
+   // val t = reduced.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("reducedParcels"))
 
-    // different flavors of Suppressed yield same results
-    val suppressedUntilWindowClosesUnbounded = Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())
-    val suppressedUntilTimeLimit: Suppressed[Windowed[String]] = Suppressed.untilTimeLimit(Duration.ofSeconds(1), Suppressed.BufferConfig.maxRecords(1))
-
-    val suppressed: KTable[Windowed[String], Parcel] = reduced.suppress(suppressedUntilWindowClosesUnbounded.withName("suppressedParcels"))
+    val suppressed: KTable[Windowed[String], Parcel] = reduced.suppress(suppressedUntilTimeLimit.withName("suppressedParcels"))//, Materialized.`with`(Serdes.stringSerde, parcelSerde))
 
     // suppressed.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("suppressedParcels"))
 

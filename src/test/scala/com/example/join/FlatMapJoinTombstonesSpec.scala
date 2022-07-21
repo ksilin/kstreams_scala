@@ -72,7 +72,7 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
   val topology: Topology = makeTopology()
   println(topology.describe())
 
-  "must join and forwards tombstones in sequence" in {
+  "must process all records and tombstones in sequence" in {
 
     val streams = new KafkaStreams(topology, streamsConfiguration)
     streams.cleanUp()
