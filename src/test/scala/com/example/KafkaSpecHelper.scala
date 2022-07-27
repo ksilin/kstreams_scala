@@ -178,7 +178,7 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
       Thread.sleep(pause)
     }
     if (attempts >= maxAttempts)
-      info(s"no data received in $attempts attempts")
+      info(s"${allRecords.size} received in $attempts attempts")
     allRecords
   }
 

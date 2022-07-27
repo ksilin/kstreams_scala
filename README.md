@@ -13,7 +13,9 @@ legal authority to do so.
 
 ## TODOs
 
-* 
+* sentinel stream 
+
+in case you need to ensure the passage of stream time and do not expect real data to arrive often enough. especially for windowing / suppression
 
 ## License ##
 

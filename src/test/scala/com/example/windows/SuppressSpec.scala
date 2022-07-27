@@ -6,20 +6,21 @@ import io.circe.generic.auto._
 import nequi.circe.kafka._
 import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
 import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.{Named, SessionWindows, Suppressed, Windowed}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.serialization.Serdes
+import org.scalatest.BeforeAndAfterEach
 import org.testcontainers.containers.Network
 
 import java.time.Duration
 import _root_.scala.jdk.CollectionConverters._
 import _root_.scala.util.Random
 
-class SuppressSpec extends SpecBase {
+class SuppressSpec extends SpecBase with BeforeAndAfterEach {
 
   case class Parcel(id: String, parts: List[String], createdAt: Long, updatedAt: Long)
 
@@ -32,7 +33,7 @@ class SuppressSpec extends SpecBase {
   val bootstrap: String = broker.getBootstrapServers
 
   val parcelInputTopicName = "parcelInputTopic"
-  val outputTopicName            = "outputTopic"
+  val outputTopicName      = "outputTopic"
 
   val parcelSerializer: Serializer[Parcel]     = implicitly
   val parcelDeserializer: Deserializer[Parcel] = implicitly
@@ -46,243 +47,224 @@ class SuppressSpec extends SpecBase {
 
   val parcelIds: List[String] = (1 to 10).toList map (_ => Random.alphanumeric.take(3).mkString)
 
-  "must emit one final event per parcel after window closes - testcontainer" - {
+  // different flavors of Suppressed
+  val suppressedUntilWindowClosesUnbounded: Suppressed[Windowed[_]] =
+    Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())
 
-    val topology = makeTopology()
-    println(topology.describe())
+  // shorter, equal and longer than session
+  val suppressedUntilTimeLimit1: Suppressed[Windowed[_]] =
+    Suppressed.untilTimeLimit(Duration.ofSeconds(1), Suppressed.BufferConfig.maxRecords(1))
+  val suppressedUntilTimeLimit3: Suppressed[Windowed[_]] =
+    Suppressed.untilTimeLimit(Duration.ofSeconds(3), Suppressed.BufferConfig.maxRecords(1))
+  val suppressedUntilTimeLimit5: Suppressed[Windowed[_]] =
+    Suppressed.untilTimeLimit(Duration.ofSeconds(5), Suppressed.BufferConfig.maxRecords(1))
 
-    "1 parcel id, 1 record" in {
+  val parcelCreatedProducer = new KafkaProducer[String, Parcel](
+    streamsConfiguration,
+    Serdes.stringSerde.serializer,
+    parcelSerializer
+  )
 
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
+  var streams: KafkaStreams = _
 
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      produceTestData(parcelIds.take(1), 1)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 200, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-
-    "1 parcel id, 2 records, then out-of-order data with same id" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      val time1 = System.currentTimeMillis()
-
-      produceTestData(parcelIds.take(1), 2)
-
-      info("producing out-of-order data")
-      // late data
-      produceTestData(parcelIds.take(1), 2, time1 - 100000)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-    "1 parcel id, 2 records, then late data with same id" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      val time1 = System.currentTimeMillis()
-
-      produceTestData(parcelIds.take(1), 2)
-
-      info("producing late data")
-      // late data
-      produceTestData(parcelIds.take(1), 2, time1 + 100000)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-    "1 parcel id, 3 records" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      produceTestData(parcelIds.take(1), 3)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-    "2 parcel ids, 1 record" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      produceTestData(parcelIds.take(2), 1)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 200, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-    "2 parcel ids, 2 records" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      produceTestData(parcelIds.take(2), 2)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 200, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
-    "2 parcel id, 3 record" in {
-
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-      KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-
-      val streams = new KafkaStreams(topology, streamsConfiguration)
-      streams.cleanUp()
-      streams.start()
-
-      val time1 = System.currentTimeMillis()
-
-      produceTestData(parcelIds.take(2), 3, time1)
-
-      val consumer = new KafkaConsumer[String, Parcel](
-        streamsConfiguration,
-        Serdes.stringSerde.deserializer(),
-        parcelDeserializer
-      )
-      consumer.subscribe(List(outputTopicName).asJavaCollection)
-      KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 200, abortOnFirstRecord = false, maxAttempts = 10)
-
-      streams.close()
-    }
-
+  override def beforeEach(): Unit = {
+    super.beforeEach()
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
+    val topology = makeTopology(suppressedUntilWindowClosesUnbounded)
+    streams = new KafkaStreams(topology, streamsConfiguration)
+    streams.cleanUp()
+    streams.start()
   }
 
-  private def produceTestData(parcelIds: List[String], recordsPerId: Int = 1, initTime: Long = System.currentTimeMillis()): Unit = {
+  override def afterEach(): Unit = {
+    super.afterEach()
+    streams.close()
+  }
 
-    val parcelCreatedProducer = new KafkaProducer[String, Parcel](
-      streamsConfiguration,
-      Serdes.stringSerde.serializer,
-      parcelSerializer
-    )
+  "expect one final event per parcel after window closes - testcontainer, simple time progress, session window, unbounded suppression" - {
 
-    parcelIds.zipWithIndex foreach { case (id, i) =>
-      // make more to actually reduce
-      (1 to recordsPerId) foreach { j =>
-        val now = initTime + i * 1000 + (Math.pow(2, j)*1000).toLong
-        val parcel = Parcel(id, List(Random.alphanumeric.take(3).mkString), now, now)
-        val sent: RecordMetadata = parcelCreatedProducer.send(new ProducerRecord[String, Parcel](parcelInputTopicName, null, now, id, parcel))
-          .get()
-        info(s"record sent with id $id,  & ts $now : ${sent.offset()}")
+    "single parcel " - {
+
+      val startTime = System.currentTimeMillis()
+
+      "1 parcel id, 1 record - no output since stream time did not progress" in {
+
+        produceTestData(parcelIds.take(1), 1, startTime)
+        val records = getResultData(outputTopicName)
+        records.isEmpty mustBe true
+      }
+
+      // TODO -
+      "1 parcel id, 2 records within window - no output since stream time did not progress beyond session window limit expect single final record with aggregated data of both records" in {
+
+        produceTestData(parcelIds.take(1), 2, startTime)
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+      }
+
+      "1 parcel id, 3 records - 2 within window, 1 outside - expect single final record with aggregated data of both first records" in {
+
+        produceTestData(parcelIds.take(1), 3, startTime)
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+
+      }
+
+      "1 parcel id, 4 records - 2 within first window, next two within own window - expect two final record for first two windows" in {
+
+        produceTestData(parcelIds.take(1), 4, startTime)
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+      }
+
+      // TODO - unexpected results - no records produced
+      "1 parcel id, 2 records, then once again with slightly later data with same id - expect more than one record" in {
+
+        produceTestData(parcelIds.take(1), 2, startTime)
+        info("producing late data")
+        produceTestData(parcelIds.take(1), 2, startTime + 5000)
+
+        val records = getResultData(outputTopicName)
+        (records.size > 1) mustBe true
+      }
+
+      // TODO - unexpected one record for first window is produced
+      "1 parcel id, 2 records, then significatly late data with same id - expect more than one record" in {
+
+        produceTestData(parcelIds.take(1), 2, startTime)
+
+        info("producing late data")
+        produceTestData(parcelIds.take(1), 2, startTime + 100000)
+        val records = getResultData(outputTopicName)
+        (records.size > 1) mustBe true
+      }
+    }
+
+    "two parcels - for mutual streamtime advance" - {
+
+      val startTime = System.currentTimeMillis()
+
+      "2 parcel ids, 1 record each - expect no final results" in {
+
+        produceTestData(parcelIds.take(2), 1, startTime)
+
+        val records = getResultData(outputTopicName)
+        records.isEmpty mustBe true
+      }
+
+      // TODO - no results, expected single result as latest record is outside of window
+      "2 parcel ids, 2 records each - expect one result - latest record is outside window " in {
+
+        produceTestData(parcelIds.take(2), 2, startTime)
+
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+      }
+
+      "2 parcel ids, 3 records each - expect two results since for both parcels latest records are outside window " in {
+
+        produceTestData(parcelIds.take(2), 3, startTime)
+
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+      }
+
+      "2 parcel ids, 4 records each - expect four results since for both parcels latest records are outside window " in {
+
+        produceTestData(parcelIds.take(2), 4, startTime)
+        val records = getResultData(outputTopicName)
+        records foreach (r => info(r))
+      }
+    }
+
+    "test expDelay" in {
+
+      (1 to 3) foreach { i =>
+        (1 to 5) foreach { j =>
+          info(s"delay for $i, $j : ${expDelay(i, j)}")
+        }
       }
     }
   }
 
+  private def produceTestData(
+      parcelIds: List[String],
+      recordsPerId: Int = 1,
+      initTime: Long = System.currentTimeMillis()
+  ): Unit =
+    parcelIds.zipWithIndex foreach { case (id, i) =>
+      // make more to actually reduce
+      (1 to recordsPerId) foreach { j =>
+        val now              = initTime + expDelay(i, j)
+        val randomParcelPart = Random.alphanumeric.take(3).mkString
+        val parcel           = Parcel(id, List(randomParcelPart), now, now)
+        val sent: RecordMetadata = parcelCreatedProducer
+          .send(new ProducerRecord[String, Parcel](parcelInputTopicName, null, now, id, parcel))
+          .get()
+        info(s"record sent with id $id, part $randomParcelPart & ts $now : ${sent.offset()}")
+      }
+    }
 
-  def makeTopology(): Topology = {
+  def getResultData(topic: String): Iterable[ConsumerRecord[String, Parcel]] = {
+    val consumer = new KafkaConsumer[String, Parcel](
+      streamsConfiguration,
+      Serdes.stringSerde.deserializer(),
+      parcelDeserializer
+    )
+    consumer.subscribe(List(topic).asJavaCollection)
+    KafkaSpecHelper.fetchAndProcessRecords(
+      consumer,
+      pause = 500,
+      abortOnFirstRecord = false,
+      maxAttempts = 10
+    )
+  }
 
-    // different flavors of Suppressed yield same results
-    val suppressedUntilWindowClosesUnbounded: Suppressed[Windowed[_]] = Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())
-    val suppressedUntilTimeLimit: Suppressed[Windowed[String]] = Suppressed.untilTimeLimit(Duration.ofSeconds(1), Suppressed.BufferConfig.maxRecords(1))
+  def expDelay(i: Int, j: Int): Long = i * 1001 + (Math.pow(2, j) * 1001).toLong
+
+  def makeTopology(
+      suppressConfig: Suppressed[Windowed[_]],
+      sessionWindowDuration: Duration = Duration.ofSeconds(3)
+  ): Topology = {
+    val sessionWindows: SessionWindows =
+      SessionWindows.ofInactivityGapWithNoGrace(sessionWindowDuration)
 
     val parcelStream: KStream[String, Parcel] = builder.stream(parcelInputTopicName)(
       Consumed.`with`(Serdes.stringSerde, parcelSerde).withName("parcelInput")
     )
 
     // val t = parcelStream.transform(() => timeLoggingTransformer[String, Parcel]("parcelStream"))
-
+    parcelStream.peek((k, v) => info(s"started processing for key $k : $v"))
     val groupedParcels: KGroupedStream[String, Parcel] = parcelStream.groupByKey(
       Grouped.`with`(Serdes.stringSerde, parcelSerde).withName("groupedParcels")
     )
-    val windowed: SessionWindowedKStream[String, Parcel] = groupedParcels.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(3)))
+    val windowed: SessionWindowedKStream[String, Parcel] = groupedParcels.windowedBy(sessionWindows)
     // TODO - use explicit store
-    val reduced: KTable[Windowed[String], Parcel] = windowed.reduce((aggregator, newParcel) => {
+    val reduced: KTable[Windowed[String], Parcel] = windowed.reduce { (aggregator, newParcel) =>
       info(s"reducing $newParcel with agg $aggregator")
       aggregator.copy(
         parts = aggregator.parts ++ newParcel.parts,
         updatedAt = System.currentTimeMillis()
       )
-    }
-    )(Materialized.as(storeName)(Serdes.stringSerde, parcelSerde))
+    }(Materialized.as(storeName)(Serdes.stringSerde, parcelSerde))
 
-   // val t = reduced.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("reducedParcels"))
+    // val t = reduced.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("reducedParcels"))
 
-    val suppressed: KTable[Windowed[String], Parcel] = reduced.suppress(suppressedUntilTimeLimit.withName("suppressedParcels"))//, Materialized.`with`(Serdes.stringSerde, parcelSerde))
+    val suppressed: KTable[Windowed[String], Parcel] = reduced.suppress(
+      suppressConfig.withName("suppressedParcels")
+    ) //, Materialized.`with`(Serdes.stringSerde, parcelSerde))
 
     // suppressed.transformValues(() => timeLoggingValueTransformer[Windowed[String], Parcel]("suppressedParcels"))
 
-    val completeParcels: KStream[Windowed[String], Parcel] = suppressed.toStream(Named.as("completeParcels"))
+    val completeParcels: KStream[Windowed[String], Parcel] =
+      suppressed.toStream(Named.as("completeParcels"))
     // dead-end for logging only
     // val loggedCompleteParcels = completeParcels.transform(() => timeLoggingTransformer[Windowed[String], Parcel]("completeParcels"))
-    val unwindowedParcels: KStream[String, Parcel] = completeParcels.map((k, v) => {
+    val unwindowedParcels: KStream[String, Parcel] = completeParcels.map { (k, v) =>
       info(s"extracting key from windowed key ${k.key()}, ${k.window()} : $v")
       (k.key(), v)
     }
-    )
     unwindowedParcels.to(outputTopicName)(Produced.`with`(Serdes.stringSerde, parcelSerde))
 
     builder.build()
