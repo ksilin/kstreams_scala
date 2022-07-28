@@ -1,6 +1,5 @@
 package com.example.windows
 
-import com.example.punctuate.Transformers.{timeLoggingTransformer, timeLoggingValueTransformer}
 import com.example.{KafkaSpecHelper, SpecBase}
 import io.circe.generic.auto._
 import nequi.circe.kafka._
@@ -13,14 +12,13 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.{Named, SessionWindows, Suppressed, Windowed}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.serialization.Serdes
-import org.scalatest.BeforeAndAfterEach
 import org.testcontainers.containers.Network
 
 import java.time.Duration
 import _root_.scala.jdk.CollectionConverters._
 import _root_.scala.util.Random
 
-class SuppressSpec extends SpecBase with BeforeAndAfterEach {
+class SuppressSpec extends SpecBase {
 
   case class Parcel(id: String, parts: List[String], createdAt: Long, updatedAt: Long)
 
@@ -65,23 +63,6 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
     parcelSerializer
   )
 
-  var streams: KafkaStreams = _
-
-  override def beforeEach(): Unit = {
-    super.beforeEach()
-    KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
-    KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
-    val topology = makeTopology(suppressedUntilWindowClosesUnbounded)
-    streams = new KafkaStreams(topology, streamsConfiguration)
-    streams.cleanUp()
-    streams.start()
-  }
-
-  override def afterEach(): Unit = {
-    super.afterEach()
-    streams.close()
-  }
-
   "expect one final event per parcel after window closes - testcontainer, simple time progress, session window, unbounded suppression" - {
 
     "single parcel " - {
@@ -95,7 +76,6 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
         records.isEmpty mustBe true
       }
 
-      // TODO -
       "1 parcel id, 2 records within window - no output since stream time did not progress beyond session window limit expect single final record with aggregated data of both records" in {
 
         produceTestData(parcelIds.take(1), 2, startTime)
@@ -130,7 +110,7 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
       }
 
       // TODO - unexpected one record for first window is produced
-      "1 parcel id, 2 records, then significatly late data with same id - expect more than one record" in {
+      "1 parcel id, 2 records, then significantly late data with same id - expect more than one record" in {
 
         produceTestData(parcelIds.take(1), 2, startTime)
 
@@ -141,14 +121,14 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
       }
     }
 
-    "two parcels - for mutual streamtime advance" - {
+    "two parcels - for mutual streamtime  - suppressedUntilWindowClosesUnbounded" - {
 
       val startTime = System.currentTimeMillis()
 
-      "2 parcel ids, 1 record each - expect no final results" in {
-
+      "2 parcel ids, 1 record each - expect no final results" in streamsContext(
+        suppressedUntilWindowClosesUnbounded
+      ) { s =>
         produceTestData(parcelIds.take(2), 1, startTime)
-
         val records = getResultData(outputTopicName)
         records.isEmpty mustBe true
       }
@@ -188,7 +168,7 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
     }
   }
 
-  private def produceTestData(
+  private def produceSeqTestData(
       parcelIds: List[String],
       recordsPerId: Int = 1,
       initTime: Long = System.currentTimeMillis()
@@ -196,6 +176,23 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
     parcelIds.zipWithIndex foreach { case (id, i) =>
       // make more to actually reduce
       (1 to recordsPerId) foreach { j =>
+        val now              = initTime + expDelay(i, j)
+        val randomParcelPart = Random.alphanumeric.take(3).mkString
+        val parcel           = Parcel(id, List(randomParcelPart), now, now)
+        val sent: RecordMetadata = parcelCreatedProducer
+          .send(new ProducerRecord[String, Parcel](parcelInputTopicName, null, now, id, parcel))
+          .get()
+        info(s"record sent with id $id, part $randomParcelPart & ts $now : ${sent.offset()}")
+      }
+    }
+
+  private def produceTestData(
+      parcelIds: List[String],
+      recordsPerId: Int = 1,
+      initTime: Long = System.currentTimeMillis()
+  ): Unit =
+    (1 to recordsPerId) foreach { j =>
+      parcelIds.zipWithIndex foreach { case (id, i) =>
         val now              = initTime + expDelay(i, j)
         val randomParcelPart = Random.alphanumeric.take(3).mkString
         val parcel           = Parcel(id, List(randomParcelPart), now, now)
@@ -222,6 +219,19 @@ class SuppressSpec extends SpecBase with BeforeAndAfterEach {
   }
 
   def expDelay(i: Int, j: Int): Long = i * 1001 + (Math.pow(2, j) * 1001).toLong
+
+  def streamsContext(suppressed: Suppressed[Windowed[_]])(testCode: (KafkaStreams) => Any) = {
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, parcelInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
+    val topology = makeTopology(suppressed)
+    System.out.println(topology.describe())
+    val streams  = new KafkaStreams(topology, streamsConfiguration)
+    streams.cleanUp()
+    streams.start()
+
+    try testCode(streams)
+    finally streams.close()
+  }
 
   def makeTopology(
       suppressConfig: Suppressed[Windowed[_]],
