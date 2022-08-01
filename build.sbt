@@ -157,4 +157,5 @@ lazy val library =
     val testcontainers =
       "com.github.christophschubert" % "cp-testcontainers" % Version.testContainers
     val scalatest           = "org.scalatest"        %% "scalatest"                % Version.scalatest
+    val scalaCheck           = "org.scalatestplus"        %% "scalacheck-1-16"                % Version.scalatest
   }
