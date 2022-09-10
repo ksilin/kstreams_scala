@@ -38,11 +38,7 @@ class JoinLookbackSpec extends SpecBase {
       createStreamStreamInnerJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
     info(topology.describe())
 
-    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
-
-    val (leftTopic, rightTopic, resultTopic) = createTopics(topologyTestDriver)
-
-    produceRecordsFetchJoinResults(leftTopic, rightTopic, resultTopic)
+    runTest(topology)
   }
 
   "stream-stream left" in {
@@ -51,12 +47,18 @@ class JoinLookbackSpec extends SpecBase {
       createStreamStreamLeftJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
     info(topology.describe())
 
-    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
-
-    val (leftTopic, rightTopic, resultTopic) = createTopics(topologyTestDriver)
-
-    produceRecordsFetchJoinResults(leftTopic, rightTopic, resultTopic)
+    runTest(topology)
   }
+
+  "stream-stream outer" in {
+
+    val topology: Topology =
+      createStreamStreamOuterJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
+    info(topology.describe())
+
+    runTest(topology)
+  }
+
 
   "stream-table inner" in {
 
@@ -64,19 +66,29 @@ class JoinLookbackSpec extends SpecBase {
       createStreamTableInnerJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
     info(topology.describe())
 
-    val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
+    runTest(topology)
+  }
 
-    val (leftTopic, rightTopic, resultTopic) = createTopics(topologyTestDriver)
+  // almost exactly like a S-T join
+  "stream-globalKTable inner" in {
 
-    produceRecordsFetchJoinResults(leftTopic, rightTopic, resultTopic)
+    val topology: Topology =
+      createStreamTableInnerJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
+    info(topology.describe())
+
+    runTest(topology)
   }
 
   "table-table inner" in {
 
     val topology: Topology =
       createTableTableInnerJoinTopology(builder, leftTopicName, rightTopicName, resultTopicName)
-    info(topology.describe())
 
+    runTest(topology)
+  }
+
+
+  private def runTest(topology: Topology): Unit = {
     val topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration)
 
     val (leftTopic, rightTopic, resultTopic) = createTopics(topologyTestDriver)
@@ -249,7 +261,6 @@ class JoinLookbackSpec extends SpecBase {
   ): Topology = {
 
     val leftStream: KStream[Integer, MyRecord] = builder.stream(leftTopicName)(consumed)
-
     val rightStream: KStream[Integer, MyRecord] = builder.stream(rightTopicName)(consumed)
 
     val joinedStream: KStream[Integer, MyRecord] =
@@ -259,6 +270,25 @@ class JoinLookbackSpec extends SpecBase {
 
     builder.build()
   }
+
+  def createStreamStreamOuterJoinTopology(
+                                          builder: StreamsBuilder,
+                                          leftTopicName: String,
+                                          rightTopicName: String,
+                                          outputTopicName: String
+                                        ): Topology = {
+
+    val leftStream: KStream[Integer, MyRecord] = builder.stream(leftTopicName)(consumed)
+    val rightStream: KStream[Integer, MyRecord] = builder.stream(rightTopicName)(consumed)
+
+    val joinedStream: KStream[Integer, MyRecord] =
+      leftStream.outerJoin(rightStream)(joiner, joinWindows)(streamJoined)
+
+    joinedStream.to(outputTopicName)(Produced.`with`(Serdes.Integer(), myRecordSerde))
+
+    builder.build()
+  }
+
 
   def createStreamTableInnerJoinTopology(
       builder: StreamsBuilder,
@@ -276,6 +306,28 @@ class JoinLookbackSpec extends SpecBase {
 
     builder.build()
   }
+
+  def createStreamGlobalKTableInnerJoinTopology(
+                                          builder: StreamsBuilder,
+                                          leftTopicName: String,
+                                          rightTopicName: String,
+                                          outputTopicName: String
+                                        ): Topology = {
+
+    val leftStream: KStream[Integer, MyRecord] = builder.stream(leftTopicName)(consumed)
+    val rightTable: GlobalKTable[Integer, MyRecord]  = builder.globalTable(rightTopicName)(consumed)
+
+    // KV-mapper required
+    // bc NO copartitioning
+    val mapper = { (k: Integer, v: MyRecord) => k}
+
+    val joinedStream: KStream[Integer, MyRecord] = leftStream.join(rightTable)(mapper, joiner)
+
+    joinedStream.to(outputTopicName)(Produced.`with`(Serdes.Integer(), myRecordSerde))
+
+    builder.build()
+  }
+
 
   def createTableTableInnerJoinTopology(
       builder: StreamsBuilder,
