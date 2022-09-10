@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.util.FutureConverter
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
 import io.circe.generic.auto._
 import nequi.circe.kafka._
@@ -20,13 +21,11 @@ import java.time.Duration
 import java.util.Properties
 import scala.concurrent.{Await, Future}
 import scala.util.Random
-
-
 import java.util.concurrent.{Future => jFuture}
 import _root_.scala.concurrent.duration._
 import _root_.scala.concurrent.ExecutionContext.Implicits.global
 
-package object windows extends LogSupport with FutureConverter {
+package object windows extends LogSupport {
 
   case class Parcel(id: String, parts: List[String], createdAt: Long, updatedAt: Long)
 
@@ -173,8 +172,8 @@ package object windows extends LogSupport with FutureConverter {
         (id, randomParcelPart, now, producer.send(record))
       }
     }
-    val recordsSentScala = recordsSent.map{case (id, part, now, jFuture) =>
-      jFuture.toScalaFuture.map(recordMeta => (id, part, now, recordMeta))
+    val recordsSentScala = recordsSent.map{case (id, part, now, jFuture: jFuture[RecordMetadata]) =>
+      FutureConverter.toScalaFuture(jFuture).map(recordMeta => (id, part, now, recordMeta))
     }
     Future.sequence(recordsSentScala)
   }

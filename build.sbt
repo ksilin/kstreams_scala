@@ -79,7 +79,6 @@ lazy val kstreams_scala =
         library.kstreams,
         library.kstreamsAvroSerde,
         library.kstreamsScala,
-        library.kstreamsTestUtils,
         library.kafkaAvroSerializer,
         library.circeKafka,
         library.kafkaStreamsCirce,
@@ -94,7 +93,7 @@ lazy val kstreams_scala =
         library.testcontainers,
         // library.log4j,
         // library.slfLog4j  % Test,
-        library.kstreams % Test,
+        library.kstreamsTestUtils % Test,
         library.scalatest % Test
       ),
     )

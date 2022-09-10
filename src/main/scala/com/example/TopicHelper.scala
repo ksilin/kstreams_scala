@@ -17,10 +17,11 @@ import scala.collection.mutable
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
+import scala.jdk.FutureConverters._
 import scala.jdk.javaapi.CollectionConverters.asJava
 import scala.util.Try
 
-object TopicHelper extends LogSupport with FutureConverter {
+object TopicHelper extends LogSupport {
 
   val metadataWait             = 2000
   val defaultReplicationFactor = 3 // 3 for cloud, 1 for local would make sense
@@ -107,7 +108,7 @@ object TopicHelper extends LogSupport with FutureConverter {
 
     val upperCasePrefix = topicPrefix.toUpperCase
 
-    val getTopicNames: Future[util.Set[String]] = adminClient.listTopics().names().toScalaFuture
+    val getTopicNames: Future[util.Set[String]] = adminClient.listTopics().names().toCompletionStage.asScala
     val topicNames                              = Await.result(getTopicNames, 60.seconds).asScala
     val topicsToDelete: mutable.Set[String] =
       topicNames.filter(_.toUpperCase.startsWith(upperCasePrefix))
@@ -121,7 +122,7 @@ object TopicHelper extends LogSupport with FutureConverter {
       val javaTopicSet = asJava(Set(topic))
       info(s"deleting topic $topic")
       val deleted: Try[Void] = Try {
-        Await.result(adminClient.deleteTopics(javaTopicSet).all().toScalaFuture, 10.seconds)
+        Await.result(adminClient.deleteTopics(javaTopicSet).all().toCompletionStage.asScala, 10.seconds)
       }
       waitForTopicToBeDeleted(adminClient, topic)
 
@@ -135,7 +136,7 @@ object TopicHelper extends LogSupport with FutureConverter {
             replicationFacor
           ) // need to box the short here to prevent ctor ambiguity
         val createTopicsResult: CreateTopicsResult = adminClient.createTopics(asJava(Set(newTopic)))
-        Await.result(createTopicsResult.all().toScalaFuture, 10.seconds)
+        Await.result(createTopicsResult.all().toCompletionStage.asScala, 10.seconds)
       }
       waitForTopicToExist(adminClient, topic)
       Thread.sleep(metadataWait)
@@ -163,7 +164,7 @@ object TopicHelper extends LogSupport with FutureConverter {
 
   val doesTopicExist: (AdminClient, String) => Boolean =
     (adminClient: AdminClient, topic: String) => {
-      val names = Await.result(adminClient.listTopics().names().toScalaFuture, 10.seconds)
+      val names = Await.result(adminClient.listTopics().names().toCompletionStage.asScala, 10.seconds)
       names.contains(topic)
     }
 
@@ -174,7 +175,7 @@ object TopicHelper extends LogSupport with FutureConverter {
       if (doesTopicExist(adminClient, topic)) {
 
         val topicDescriptions: mutable.Map[String, TopicDescription] = Await
-          .result(adminClient.describeTopics(List(topic).asJava).all().toScalaFuture, 60.seconds)
+          .result(adminClient.describeTopics(List(topic).asJava).allTopicNames().toCompletionStage.asScala, 60.seconds)
           .asScala
 
         topicDescriptions.get(topic).exists { desc =>
