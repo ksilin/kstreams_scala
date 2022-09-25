@@ -1,6 +1,6 @@
 package com.example
 
-import com.example.util.FutureConverter
+import com.example.util.{FutureConverter, KafkaSpecHelper}
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
 import io.circe.generic.auto._
 import nequi.circe.kafka._

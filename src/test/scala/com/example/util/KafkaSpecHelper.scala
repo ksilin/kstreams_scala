@@ -1,21 +1,16 @@
-package com.example
+package com.example.util
 
-import org.apache.kafka.clients.admin.{
-  AdminClient,
-  CreateTopicsResult,
-  DeleteTopicsResult,
-  NewTopic
-}
-import org.apache.kafka.clients.consumer.{ Consumer, ConsumerRecord, ConsumerRecords }
+import org.apache.kafka.clients.admin.{AdminClient, CreateTopicsResult, DeleteTopicsResult, NewTopic}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerRecords}
 import org.apache.kafka.common.config.TopicConfig
 import wvlet.log.LogSupport
 
 import java.time
 import java.util.Collections
 import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.jdk.javaapi.CollectionConverters.asJava
+import scala.jdk.javaapi.CollectionConverters._
 import scala.util.Try
 
 object KafkaSpecHelper extends LogSupport with FutureConverter {
@@ -140,7 +135,7 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
       names.contains(topic)
     }
 
-  // assumes consumer is already subscribed
+  // assumes logConsumer is already subscribed
   def fetchAndProcessRecords[K, V](
       consumer: Consumer[K, V],
       process: ConsumerRecord[K, V] => Unit = { r: ConsumerRecord[K, V] =>

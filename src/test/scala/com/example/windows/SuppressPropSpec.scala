@@ -11,7 +11,6 @@ import org.scalatest.ParallelTestExecution
 import org.testcontainers.containers.Network
 import org.scalatest.prop.TableDrivenPropertyChecks._
 
-
 class SuppressPropSpec extends SpecBase with ParallelTestExecution {
 
   val containerFactory = new CPTestContainerFactory(Network.newNetwork())

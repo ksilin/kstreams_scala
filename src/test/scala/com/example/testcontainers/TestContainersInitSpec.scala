@@ -1,7 +1,8 @@
 package com.example.testcontainers
 
 import com.example.json.TestData._
-import com.example.{KafkaSpecHelper, SpecBase, Translation}
+import com.example.util.KafkaSpecHelper
+import com.example.{SpecBase, Translation}
 import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
 import org.testcontainers.containers.Network
 import net.christophschubert.cp.testcontainers.SchemaRegistryContainer

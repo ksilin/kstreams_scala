@@ -1,6 +1,7 @@
 package com.example.join
 
-import com.example.{KafkaSpecHelper, SpecBase}
+import com.example.SpecBase
+import com.example.util.KafkaSpecHelper
 import io.circe.generic.auto._
 import nequi.circe.kafka._
 import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
@@ -12,6 +13,7 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.Named
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.testcontainers.containers.Network
 import org.testcontainers.containers.output.{OutputFrame, WaitingConsumer}
@@ -22,6 +24,14 @@ import _root_.scala.jdk.CollectionConverters._
 
 class CogroupSpec extends SpecBase {
 
+  // a customer is represented by a name and three collections of line items from different streams
+  // Cart, Wishlist & Purchases
+
+  // without cogroup, we would pre-aggregate the line items and then outer join one after the other
+
+  // with cogroup, we can aggregate directly in the target type
+  // and there is just one state store
+
   case class LineItem(id: String, name: String)
   case class Customer(
       name: String,
@@ -30,7 +40,7 @@ class CogroupSpec extends SpecBase {
       purchases: List[LineItem]
   )
 
-  val consumer: WaitingConsumer = new WaitingConsumer()
+  val logConsumer: WaitingConsumer = new WaitingConsumer()
 
   private val containerFactory = new CPTestContainerFactory(Network.newNetwork())
   private val broker: ConfluentServerContainer =
@@ -38,9 +48,9 @@ class CogroupSpec extends SpecBase {
       .createConfluentServer()
   broker.start()
 
-  broker.followOutput(consumer, OutputFrame.OutputType.STDOUT)
+  broker.followOutput(logConsumer, OutputFrame.OutputType.STDOUT)
 
-  consumer.waitUntil({frame: OutputFrame =>
+  logConsumer.waitUntil({ frame: OutputFrame =>
     frame.getUtf8String.contains("started")}, 60, TimeUnit.SECONDS)
 
   private val bootstrap: String = broker.getBootstrapServers
@@ -57,7 +67,7 @@ class CogroupSpec extends SpecBase {
 
   streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, suiteName)
   streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap)
-  streamsConfiguration.put(ConsumerConfig.GROUP_ID_CONFIG, s"${suiteName}-group")
+  streamsConfiguration.put(ConsumerConfig.GROUP_ID_CONFIG, s"$suiteName-group")
   streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   private val adminClient: AdminClient = AdminClient.create(streamsConfiguration)
@@ -68,18 +78,18 @@ class CogroupSpec extends SpecBase {
     LineItem(Random.alphanumeric.take(3).mkString, Random.alphanumeric.take(7).mkString)
   }
 
+  val records: Seq[ProducerRecord[String, LineItem]] = lineItems map { item =>
+    val topic = Random.shuffle(topics).head
+    val customer = Random.shuffle(customerIds).head
+    new ProducerRecord[String, LineItem](topic, customer, item)
+  }
+
   "must cogroup items" in {
 
-    KafkaSpecHelper.createTopic(adminClient, purchaseInputTopicName, 1, 1)
-    KafkaSpecHelper.createTopic(adminClient, wishlistInputTopicName, 1, 1)
-    KafkaSpecHelper.createTopic(adminClient, cartInputTopicName, 1, 1)
-
-    produceTestData
-
-    val topology = makeTopology()
-    println(topology.describe())
-    val streams = new KafkaStreams(topology, streamsConfiguration)
-    streams.start()
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, purchaseInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, wishlistInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, cartInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, customerOutputTopicName, 1, 1)
 
     val consumer = new KafkaConsumer[String, Customer](
       streamsConfiguration,
@@ -87,28 +97,60 @@ class CogroupSpec extends SpecBase {
       implicitly[Deserializer[Customer]]
     )
     consumer.subscribe(List(customerOutputTopicName).asJavaCollection)
+    produceTestData(records)
+
+    val topology = makeCogroupTopology()
+    println(topology.describe())
+    val streams = new KafkaStreams(topology, streamsConfiguration)
+    streams.start()
+
     KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, maxAttempts = 10, abortOnFirstRecord = false)
 
     streams.close()
   }
 
-  private def produceTestData = {
+  "must join items" in {
+
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, purchaseInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, wishlistInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, cartInputTopicName, 1, 1)
+    KafkaSpecHelper.createOrTruncateTopic(adminClient, customerOutputTopicName, 1, 1)
+
+    streamsConfiguration.put(ConsumerConfig.GROUP_ID_CONFIG, s"$suiteName-group2")
+    val consumer = new KafkaConsumer[String, Customer](
+      streamsConfiguration,
+      Serdes.stringSerde.deserializer(),
+      implicitly[Deserializer[Customer]]
+    )
+    consumer.subscribe(List(customerOutputTopicName).asJavaCollection)
+
+    produceTestData(records)
+
+    val topology = makeNoCogroupTopology()
+    println(topology.describe())
+    streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, s"${suiteName}-2")
+    val streams = new KafkaStreams(topology, streamsConfiguration)
+    streams.start()
+
+    KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, maxAttempts = 10, abortOnFirstRecord = false)
+
+    streams.close()
+  }
+
+
+  private def produceTestData(records: Seq[ProducerRecord[String, LineItem]]): Unit = {
     val lineItemProducer = new KafkaProducer[String, LineItem](
       streamsConfiguration,
       Serdes.stringSerde.serializer(),
       itemSerializer
     )
-
-    lineItems foreach { item =>
-      val topic = Random.shuffle(topics).head
-      val customer = Random.shuffle(customerIds).head
-      info(s"producing $topic record for customer $customer: $item")
-      val record = new ProducerRecord[String, LineItem](topic, customer, item)
-      lineItemProducer.send(record).get()
-    }
+    records foreach { r =>
+      info(s"producing record for customer ${r.key()}: ${r.value()}")
+        lineItemProducer.send(r).get()
+  }
   }
 
-  def makeTopology(): Topology = {
+  def makeCogroupTopology(): Topology = {
 
     val purchaseStream: KStream[String, LineItem] = builder.stream(purchaseInputTopicName)(
       Consumed.`with`(Serdes.stringSerde, itemSerde).withName("purchaseInput")
@@ -149,5 +191,63 @@ class CogroupSpec extends SpecBase {
 
     builder.build()
   }
+
+  def makeNoCogroupTopology(): Topology = {
+
+    val builder: StreamsBuilder = new StreamsBuilder()
+
+    val purchaseStream: KStream[String, LineItem] = builder.stream(purchaseInputTopicName)(
+      Consumed.`with`(Serdes.stringSerde, itemSerde).withName("purchaseInput2")
+    )
+    val wishlistStream: KStream[String, LineItem] = builder.stream(wishlistInputTopicName)(
+      Consumed.`with`(Serdes.stringSerde, itemSerde).withName("wishlistInput2")
+    )
+    val cartStream: KStream[String, LineItem] = builder.stream(cartInputTopicName)(
+      Consumed.`with`(Serdes.stringSerde, itemSerde).withName("cartInput2")
+    )
+
+    val groupedPurchases: KGroupedStream[String, LineItem] = purchaseStream.groupByKey(Grouped.`with`("groupedPurchase2"))
+    val groupedWishlist  = wishlistStream.groupByKey(Grouped.`with`("groupedWishlist2"))
+    val groupedCart      = cartStream.groupByKey(Grouped.`with`("groupedCart2"))
+
+
+    val aggregatedPurchases: KTable[String, Customer] = groupedPurchases.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)){
+      (name, item, customer) =>
+        info(s"aggregating purchases: $name, $item, $customer")
+        customer.copy(name = name, purchases = item :: customer.purchases)
+    }
+    val aggregatedWishlist: KTable[String, Customer] = groupedWishlist.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) {
+      (name, item, customer) =>
+      info(s"aggregating wishlist: $name, $item, $customer")
+      customer.copy(name = name, wishlist = item :: customer.wishlist)
+    }
+    val aggregatedCart: KTable[String, Customer] = groupedCart.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)){
+      (name, item, customer) =>
+        info(s"aggregating cart: $name, $item, $customer")
+        customer.copy(name = name, cart = item :: customer.cart)
+    }
+
+    val fullCustomer: KTable[String, Customer] = aggregatedPurchases
+      .outerJoin(aggregatedWishlist){ (customerPurchase, customerWishList) =>
+        info(s"joining: customerPurchase: $customerPurchase, customerWishList: $customerWishList")
+        val name = if (null == customerPurchase) customerWishList.name else customerPurchase.name
+        val purchases = if (null == customerPurchase) Nil else customerPurchase.purchases
+        val wishList = if (null == customerWishList) Nil else customerWishList.wishlist
+        Customer(name, Nil, wishList, purchases)
+      }
+      .outerJoin(aggregatedCart){ (customerPurshaseWishlist, customerCart) =>
+        info(s"joining: customerPurshaseWishlist: $customerPurshaseWishlist, customerCart: $customerCart")
+        val name = if (null == customerCart) customerPurshaseWishlist.name else customerCart.name
+        val purchases = if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.purchases
+        val wishList = if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.wishlist
+        val cart = if (null == customerCart) Nil else customerCart.cart
+        Customer(name, cart, wishList, purchases)
+      }
+
+    fullCustomer.toStream(Named.as("outStream2")).peek{ case (k, v) => info(s"writing $k : $v to $customerOutputTopicName")}.to(customerOutputTopicName)
+
+    builder.build()
+  }
+
 
 }
