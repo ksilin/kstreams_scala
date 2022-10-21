@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.util.FutureConverter
 import io.confluent.common.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.streams.StreamsConfig
@@ -10,7 +11,7 @@ import wvlet.log.LogSupport
 
 import java.util.Properties
 
-class SpecBase extends AnyFreeSpecLike with LogSupport with Matchers {
+class SpecBase extends AnyFreeSpecLike with LogSupport with Matchers with FutureConverter {
 
   val streamsConfiguration: Properties = new Properties()
   streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, this.suiteName)
@@ -18,6 +19,7 @@ class SpecBase extends AnyFreeSpecLike with LogSupport with Matchers {
   // we want to see the topology exactly as we created it:
   streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION)
   streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+  streamsConfiguration.put(ConsumerConfig.GROUP_ID_CONFIG, this.suiteName)
   // streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
   // streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
   // allowing caching, but putting upper bound on the time records remain in cache

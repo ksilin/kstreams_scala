@@ -81,6 +81,7 @@ lazy val kstreams_scala =
         library.kstreamsScala,
         library.kafkaAvroSerializer,
         library.circeKafka,
+        library.embeddedKafka,
         library.kafkaStreamsCirce,
         library.gson,
         library.ksqlDbTestUtil,
@@ -94,7 +95,7 @@ lazy val kstreams_scala =
         // library.log4j,
         // library.slfLog4j  % Test,
         library.kstreamsTestUtils % Test,
-        library.scalatest % Test
+        library.scalatest         % Test
       ),
     )
 
@@ -123,8 +124,9 @@ lazy val library =
       val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
-      val gson = "2.9.0"
-      val testContainers = "0.2.1"
+      val gson              = "2.9.0"
+      val testContainers    = "0.2.1"
+      val embeddedKafka     = "3.3.1"
       val betterFiles       = "3.9.1"
       val config            = "1.4.2"
       val scopt             = "4.1.0"
@@ -134,27 +136,28 @@ lazy val library =
       val log4j             = "1.2.17"
       val slfLog4j          = "1.7.30"
     }
-    val clients             = "org.apache.kafka"      % "kafka-clients"            % Version.kafka
-    val kstreams            = "org.apache.kafka"      % "kafka-streams"            % Version.kafka
-    val kstreamsAvroSerde   = "io.confluent"          % "kafka-streams-avro-serde" % Version.confluent
-    val kstreamsScala       = "org.apache.kafka"     %% "kafka-streams-scala"      % Version.kafka
-    val kstreamsTestUtils   = "org.apache.kafka"      % "kafka-streams-test-utils" % Version.kafka
-    val kafka               = "org.apache.kafka"     %% "kafka"                    % Version.kafka
-    val kafkaAvroSerializer = "io.confluent"          % "kafka-avro-serializer"    % Version.confluent
-    val circeKafka          = "com.nequissimus"      %% "circe-kafka"              % Version.circeKafka
-    val circeGeneric        = "io.circe"             %% "circe-generic"            % Version.circe
-    val gson  = "com.google.code.gson" % "gson" % Version.gson
-    val kafkaStreamsCirce   = "com.goyeau"           %% "kafka-streams-circe"      % Version.kafkaStreamsCirce
-    val ksqlDbTestUtil      = "io.confluent.ksql"     % "ksqldb-test-util"         % Version.confluent
-    val betterFiles         = "com.github.pathikrit" %% "better-files"             % Version.betterFiles
-    val config              = "com.typesafe"          % "config"                   % Version.config
-    val scopt               = "com.github.scopt"     %% "scopt"                    % Version.scopt
-    val airframeLog         = "org.wvlet.airframe"   %% "airframe-log"             % Version.airframeLog
-    val logback             = "ch.qos.logback"        % "logback-classic"          % Version.logback
-    val log4j               = "log4j"                 % "log4j"                    % Version.log4j
-    val slfLog4j            = "org.slf4j"             % "slf4j-log4j12"            % Version.slfLog4j
+    val clients             = "org.apache.kafka"         % "kafka-clients"            % Version.kafka
+    val kstreams            = "org.apache.kafka"         % "kafka-streams"            % Version.kafka
+    val kstreamsAvroSerde   = "io.confluent"             % "kafka-streams-avro-serde" % Version.confluent
+    val kstreamsScala       = "org.apache.kafka"        %% "kafka-streams-scala"      % Version.kafka
+    val kstreamsTestUtils   = "org.apache.kafka"         % "kafka-streams-test-utils" % Version.kafka
+    val embeddedKafka       = "io.github.embeddedkafka" %% "embedded-kafka"           % Version.embeddedKafka
+    val kafka               = "org.apache.kafka"        %% "kafka"                    % Version.kafka
+    val kafkaAvroSerializer = "io.confluent"             % "kafka-avro-serializer"    % Version.confluent
+    val circeKafka          = "com.nequissimus"         %% "circe-kafka"              % Version.circeKafka
+    val circeGeneric        = "io.circe"                %% "circe-generic"            % Version.circe
+    val gson                = "com.google.code.gson"     % "gson"                     % Version.gson
+    val kafkaStreamsCirce   = "com.goyeau"              %% "kafka-streams-circe"      % Version.kafkaStreamsCirce
+    val ksqlDbTestUtil      = "io.confluent.ksql"        % "ksqldb-test-util"         % Version.confluent
+    val betterFiles         = "com.github.pathikrit"    %% "better-files"             % Version.betterFiles
+    val config              = "com.typesafe"             % "config"                   % Version.config
+    val scopt               = "com.github.scopt"        %% "scopt"                    % Version.scopt
+    val airframeLog         = "org.wvlet.airframe"      %% "airframe-log"             % Version.airframeLog
+    val logback             = "ch.qos.logback"           % "logback-classic"          % Version.logback
+    val log4j               = "log4j"                    % "log4j"                    % Version.log4j
+    val slfLog4j            = "org.slf4j"                % "slf4j-log4j12"            % Version.slfLog4j
     val testcontainers =
       "com.github.christophschubert" % "cp-testcontainers" % Version.testContainers
-    val scalatest           = "org.scalatest"        %% "scalatest"                % Version.scalatest
-    val scalaCheck           = "org.scalatestplus"        %% "scalacheck-1-16"                % Version.scalatest
+    val scalatest  = "org.scalatest"     %% "scalatest"       % Version.scalatest
+    val scalaCheck = "org.scalatestplus" %% "scalacheck-1-16" % Version.scalatest
   }

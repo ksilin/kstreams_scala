@@ -12,7 +12,6 @@ import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, Produced}
 import org.apache.kafka.streams.scala.serialization.Serdes.intSerde
 import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder, Stores}
-import org.apache.kafka.streams.scala.ImplicitConversions._
 
 import _root_.scala.util.Random
 import java.time.Duration
