@@ -249,5 +249,86 @@ class CogroupSpec extends SpecBase {
     builder.build()
   }
 
+  // cogroup topo
+  // 1 aggregate state store
+  /*
+  Topologies:
+   Sub-topology: 0
+    Source: cartInput (topics: [cartInputTopic])
+      --> COGROUPKSTREAM-AGGREGATE-0000000006
+    Source: purchaseInput (topics: [purchaseTopic])
+      --> COGROUPKSTREAM-AGGREGATE-0000000004
+    Source: wishlistInput (topics: [wishlistInputTopic])
+      --> COGROUPKSTREAM-AGGREGATE-0000000005
+    Processor: COGROUPKSTREAM-AGGREGATE-0000000004 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])
+      --> COGROUPKSTREAM-MERGE-0000000007
+      <-- purchaseInput
+    Processor: COGROUPKSTREAM-AGGREGATE-0000000005 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])
+      --> COGROUPKSTREAM-MERGE-0000000007
+      <-- wishlistInput
+    Processor: COGROUPKSTREAM-AGGREGATE-0000000006 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])
+      --> COGROUPKSTREAM-MERGE-0000000007
+      <-- cartInput
+    Processor: COGROUPKSTREAM-MERGE-0000000007 (stores: [])
+      --> outStream
+      <-- COGROUPKSTREAM-AGGREGATE-0000000004, COGROUPKSTREAM-AGGREGATE-0000000005, COGROUPKSTREAM-AGGREGATE-0000000006
+    Processor: outStream (stores: [])
+      --> KSTREAM-PEEK-0000000009
+      <-- COGROUPKSTREAM-MERGE-0000000007
+    Processor: KSTREAM-PEEK-0000000009 (stores: [])
+      --> KSTREAM-SINK-0000000010
+      <-- outStream
+    Sink: KSTREAM-SINK-0000000010 (topic: customerOutputTopic)
+      <-- KSTREAM-PEEK-0000000009
+   */
+
+  // join topo
+  // three state stores
+  /*
+  Topologies:
+   Sub-topology: 0
+    Source: purchaseInput2 (topics: [purchaseTopic])
+      --> KSTREAM-AGGREGATE-0000000004
+    Source: wishlistInput2 (topics: [wishlistInputTopic])
+      --> KSTREAM-AGGREGATE-0000000006
+    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])
+      --> KTABLE-JOINTHIS-0000000010
+      <-- purchaseInput2
+    Processor: KSTREAM-AGGREGATE-0000000006 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000005])
+      --> KTABLE-JOINOTHER-0000000011
+      <-- wishlistInput2
+    Processor: KTABLE-JOINOTHER-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])
+      --> KTABLE-MERGE-0000000009
+      <-- KSTREAM-AGGREGATE-0000000006
+    Processor: KTABLE-JOINTHIS-0000000010 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000005])
+      --> KTABLE-MERGE-0000000009
+      <-- KSTREAM-AGGREGATE-0000000004
+    Source: cartInput2 (topics: [cartInputTopic])
+      --> KSTREAM-AGGREGATE-0000000008
+    Processor: KSTREAM-AGGREGATE-0000000008 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000007])
+      --> KTABLE-JOINOTHER-0000000014
+      <-- cartInput2
+    Processor: KTABLE-MERGE-0000000009 (stores: [])
+      --> KTABLE-JOINTHIS-0000000013
+      <-- KTABLE-JOINTHIS-0000000010, KTABLE-JOINOTHER-0000000011
+    Processor: KTABLE-JOINOTHER-0000000014 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003, KSTREAM-AGGREGATE-STATE-STORE-0000000005])
+      --> KTABLE-MERGE-0000000012
+      <-- KSTREAM-AGGREGATE-0000000008
+    Processor: KTABLE-JOINTHIS-0000000013 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000007])
+      --> KTABLE-MERGE-0000000012
+      <-- KTABLE-MERGE-0000000009
+    Processor: KTABLE-MERGE-0000000012 (stores: [])
+      --> outStream2
+      <-- KTABLE-JOINTHIS-0000000013, KTABLE-JOINOTHER-0000000014
+    Processor: outStream2 (stores: [])
+      --> KSTREAM-PEEK-0000000016
+      <-- KTABLE-MERGE-0000000012
+    Processor: KSTREAM-PEEK-0000000016 (stores: [])
+      --> KSTREAM-SINK-0000000017
+      <-- outStream2
+    Sink: KSTREAM-SINK-0000000017 (topic: customerOutputTopic)
+      <-- KSTREAM-PEEK-0000000016
+   */
+
 
 }
