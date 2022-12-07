@@ -17,6 +17,21 @@ legal authority to do so.
 
 in case you need to ensure the passage of stream time and do not expect real data to arrive often enough. especially for windowing / suppression
 
+* FlatMapJoinTombstonesSpec
+
+add test for PK join for comparison
+
+Q - can caching within the FK join be controlled?  
+
+## Tests
+
+### Join
+
+#### CogroupSpec
+
+
+
+
 ## License ##
 
 This code is open source software licensed under the

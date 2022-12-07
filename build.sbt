@@ -119,8 +119,8 @@ lazy val commonSettings =
 lazy val library =
   new {
     object Version {
-      val kafka             = "3.1.1"
-      val confluent         = "7.1.2"
+      val kafka             = "3.3.0"
+      val confluent         = "7.3.0"
       val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
@@ -138,12 +138,12 @@ lazy val library =
     }
     val clients             = "org.apache.kafka"         % "kafka-clients"            % Version.kafka
     val kstreams            = "org.apache.kafka"         % "kafka-streams"            % Version.kafka
-    val kstreamsAvroSerde   = "io.confluent"             % "kafka-streams-avro-serde" % Version.confluent
     val kstreamsScala       = "org.apache.kafka"        %% "kafka-streams-scala"      % Version.kafka
     val kstreamsTestUtils   = "org.apache.kafka"         % "kafka-streams-test-utils" % Version.kafka
-    val embeddedKafka       = "io.github.embeddedkafka" %% "embedded-kafka"           % Version.embeddedKafka
     val kafka               = "org.apache.kafka"        %% "kafka"                    % Version.kafka
+    val kstreamsAvroSerde   = "io.confluent"             % "kafka-streams-avro-serde" % Version.confluent
     val kafkaAvroSerializer = "io.confluent"             % "kafka-avro-serializer"    % Version.confluent
+    val embeddedKafka       = "io.github.embeddedkafka" %% "embedded-kafka"           % Version.embeddedKafka
     val circeKafka          = "com.nequissimus"         %% "circe-kafka"              % Version.circeKafka
     val circeGeneric        = "io.circe"                %% "circe-generic"            % Version.circe
     val gson                = "com.google.code.gson"     % "gson"                     % Version.gson
