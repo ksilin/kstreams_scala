@@ -50,7 +50,8 @@ class EventDrivenAggregationSpec extends SpecBase {
   "must aggregate and react to triggers" in {
 
     val topology: Topology =
-      EventDrivenAggregationTopo.createTopology( inputTopicName, triggerInputTopicName, outputTopicName, storeName)
+      //EventDrivenAggregationTopo.createTopologyPAPI( inputTopicName, triggerInputTopicName, outputTopicName, storeName)
+      EventDrivenAggregationTopo.createTopologyDSL(builder, inputTopicName, triggerInputTopicName, outputTopicName, storeName)
 
     info(topology.describe())
 
