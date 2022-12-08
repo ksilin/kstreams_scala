@@ -63,11 +63,11 @@ object EventDrivenAggregationTopo extends StrictLogging {
       sensorName: String
   ): Topology = {
 
-    val keyValueStoreBuilder: StoreBuilder[KeyValueStore[String, String]] =
+    val aggregationStoreBuilder: StoreBuilder[KeyValueStore[String, SensorDataAggregation]] =
       Stores.keyValueStoreBuilder(
         Stores.persistentKeyValueStore(storeName),
         stringSerde,
-        stringSerde
+        aggregationSerde
       )
 
     val dataInputSourceName    = "dataInput"
@@ -99,12 +99,12 @@ object EventDrivenAggregationTopo extends StrictLogging {
         () => triggerProcessor(storeName),
         triggerInputSourceName
       )
-      .addStateStore(keyValueStoreBuilder, dataProcessorName, triggerProcessorName)
+      .addStateStore(aggregationStoreBuilder, dataProcessorName, triggerProcessorName)
       .addSink(
         outputTopic,
         outputTopic,
         stringSerde.serializer(),
-        stringSerde.serializer(),
+        aggregationSerializer,
         triggerProcessorName
       )
 
@@ -178,7 +178,7 @@ object EventDrivenAggregationTopo extends StrictLogging {
         val maybeSensorValue: Option[Int] =
           data.sensorData.asScala.find(sensor => sensorName == sensor.name).map(_.value)
         maybeSensorValue map { value: Int =>
-          Option(store.get(machineId)) map (c => updateAggregation(c, value)) getOrElse logger.warn(
+          Option(store.get(machineId)) map (c => updateAggregation(c, value, data.ts)) getOrElse logger.warn(
             s"no current aggregation found for $machineId and sensor $sensorName at ${record
               .timestamp()}. Ignoring event. Current value $value"
           )
@@ -191,8 +191,8 @@ object EventDrivenAggregationTopo extends StrictLogging {
         logger.info(s"data processor punctuator at $ts")
       }
 
-      def updateAggregation(currentAgg: SensorDataAggregation, value: Int): Unit = {
-        val newAgg = currentAgg.copy(sensorSum = currentAgg.sensorSum + value)
+      def updateAggregation(currentAgg: SensorDataAggregation, value: Int, newTS: Long): Unit = {
+        val newAgg = currentAgg.copy(sensorSum = currentAgg.sensorSum + value, ts = newTS)
         logger.info(s"adding $value to current: ${currentAgg.sensorSum}")
         logger.info(s"current aggregation for ${currentAgg.name}: $newAgg")
         store.put(currentAgg.name, newAgg)
@@ -230,10 +230,10 @@ object EventDrivenAggregationTopo extends StrictLogging {
         val currentValue: Option[SensorDataAggregation] = Option(store.get(machineId))
 
         currentValue foreach { currentAgg =>
-          logger.info(s"change triggers output forwarding: $currentValue")
+          val updatedAgg = currentAgg.copy(triggerStop = trigger)
           val forwardedRecord: Record[String, SensorDataAggregation] =
-            new Record(machineId, currentAgg, trigger.ts)
-          logger.info(s"forwarding aggregation $currentAgg")
+            new Record(machineId, updatedAgg, trigger.ts)
+          logger.info(s"forwarding aggregation $updatedAgg")
           ctx.forward(forwardedRecord)
         }
         initStoreFor(machineId, trigger)
