@@ -50,8 +50,7 @@ class EventDrivenAggregationSpec extends SpecBase {
   "must aggregate and react to triggers" in {
 
     val topology: Topology =
-      //EventDrivenAggregationTopo.createTopologyPAPI( inputTopicName, triggerInputTopicName, outputTopicName, storeName)
-      EventDrivenAggregationTopo.createTopologyDSL(builder, inputTopicName, triggerInputTopicName, outputTopicName, storeName)
+      EventDrivenAggregationTopo.createTopologyDSL(builder, inputTopicName, triggerInputTopicName, outputTopicName, storeName, "1")
 
     info(topology.describe())
 
@@ -77,6 +76,7 @@ class EventDrivenAggregationSpec extends SpecBase {
       Serdes.String().deserializer(),
       Serdes.String().deserializer()
     )
+    inputTopicMachineData.pipeKeyValueList(machineData.take(2).asJava)
     triggerTopic.pipeKeyValueList(triggerDataStart.asJava)
     inputTopicMachineData.pipeKeyValueList(machineData.asJava)
     triggerTopic.pipeKeyValueList(triggerDataEnd.asJava)
@@ -87,8 +87,9 @@ class EventDrivenAggregationSpec extends SpecBase {
       topologyTestDriver.advanceWallClockTime(Duration.ofSeconds(1))
     }
 
+    logger.info("resulting records:")
     val outputRecords: util.Map[String, lang.String] = outputTopic.readKeyValuesToMap()
-    outputRecords.asScala.values foreach println
+    outputRecords.asScala.values foreach (r => logger.info(r))
 
     // must contain theSameElementsAs data.map(_.value)
 
@@ -96,10 +97,9 @@ class EventDrivenAggregationSpec extends SpecBase {
 
     // explicit store init
     val store: KeyValueStore[String, lang.String] = topologyTestDriver.getKeyValueStore[String, lang.String](storeName)
-    logger.info("store contents at test end:")
+    logger.info("store contents at test end (should contain aggregations with sentinel afters):")
     val storeContents: List[KeyValue[String, lang.String]] = store.all().asScala.toList
-
-    storeContents foreach println
+    storeContents foreach (r => logger.info(r))
 
     topologyTestDriver.metrics().asScala.foreach{ case (k, v) =>
       logger.info(s"metric ${k.name()}: ${v.metricValue()}")
