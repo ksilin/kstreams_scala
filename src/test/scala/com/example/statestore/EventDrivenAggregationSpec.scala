@@ -38,12 +38,12 @@ class EventDrivenAggregationSpec extends SpecBase {
   }
 
   val triggerDataStart: List[KeyValue[String, MachineTrigger]] = machineIds map {machineId =>
-    val trigger = MachineTrigger(machineId, machineId + "_before_1", machineId + "after_1", now)
+    val trigger = MachineTrigger(machineId, machineId + "_before_1", machineId + "_after_1", now)
    new KeyValue(machineId, trigger)
   }
 
   val triggerDataEnd: List[KeyValue[String, MachineTrigger]] = machineIds map { machineId =>
-    val trigger = MachineTrigger(machineId, machineId + "_after_1", machineId + "after_2", later)
+    val trigger = MachineTrigger(machineId, machineId + "_after_1", machineId + "_after_2", later)
     new KeyValue(machineId, trigger)
   }
 

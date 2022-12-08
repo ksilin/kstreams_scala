@@ -52,6 +52,9 @@ object EventDrivenAggregationTopo extends StrictLogging {
   val aggregationSerde: Serde[SensorDataAggregation] =
     Serdes.serdeFrom(aggregationSerializer, aggregationDeserializer)
 
+  // cannot serialize Option with Gson -> replacing by sentinel value
+  val dummyTrigger: MachineTrigger = MachineTrigger("PLACEHOLDER", "PLACEHOLDER", "PLACEHOLDER", 0L)
+
   def createTopologyPAPI(
       inputTopic: String,
       triggerTopic: String,
@@ -123,15 +126,23 @@ object EventDrivenAggregationTopo extends StrictLogging {
         stringSerde
       )
 
+    val aggregationStoreBuilder: StoreBuilder[KeyValueStore[String, SensorDataAggregation]] =
+      Stores.keyValueStoreBuilder(
+        Stores.persistentKeyValueStore(storeName + "2"),
+        stringSerde,
+        aggregationSerde
+      )
+
     builder.addStateStore(keyValueStoreBuilder)
+    builder.addStateStore(aggregationStoreBuilder)
 
     val dataStream: KStream[String, MachineData]    = builder.stream(inputTopic)(Consumed.`with`(stringSerde, machineDataSerde))
     val triggerStream: KStream[String, MachineTrigger] = builder.stream(triggerTopic)(Consumed.`with`(stringSerde, triggerSerde))
 
     val _ =
-      dataStream.process[String, String](() => dataProcessor(storeName, "2"), storeName)
+      dataStream.process[String, String](() => dataProcessor(storeName, "2"), storeName, storeName + "2")
     val aggregationStream =
-      triggerStream.process[String, String](() => triggerProcessor(storeName), storeName)
+      triggerStream.process[String, String](() => triggerProcessor(storeName), storeName, storeName + "2")
 
     aggregationStream.to(outputTopic)
 
@@ -146,13 +157,14 @@ object EventDrivenAggregationTopo extends StrictLogging {
 
       var ctx: ProcessorContext[String, String] = _
       var store: KeyValueStore[String, String]  = _
-      //var store: KeyValueStore[String, SensorDataAggregation]  = _
+      var store2: KeyValueStore[String, SensorDataAggregation]  = _
       var cancellablePunctuator: Cancellable    = _
 
       override def init(context: ProcessorContext[String, String]): Unit = {
         logger.info("initializing machine data processor - aggregator")
         ctx = context
         store = ctx.getStateStore(storeName)
+        store2 = ctx.getStateStore(storeName + "2")
 
         cancellablePunctuator = ctx.schedule(
           Duration.ofMillis(1000),
@@ -173,10 +185,17 @@ object EventDrivenAggregationTopo extends StrictLogging {
           val currentValue: String = Option(store.get(machineId)).getOrElse("")
 
           if (currentValue.nonEmpty) {
-            logger.info(s"adding ${value} to current: ${currentValue}")
+            logger.info(s"adding $value to current: $currentValue")
             store.put(machineId, currentValue + value.toString)
+
+            val currentAgg = store2.get(machineId)
+            val newAgg = currentAgg.copy(sensorSum = currentAgg.sensorSum + value)
+            logger.info(s"adding $value to current: ${currentAgg.sensorSum}")
+            logger.info(s"current aggregation for $machineId: $newAgg")
+            store2.put(machineId, newAgg)
+
           } else {
-            logger.info(s"initializing state store value for $machineId with ${value}")
+            logger.warn(s"no current aggregation found for $machineId and sensor $sensorName. Ignoring event. Current value $value")
             store.put(machineId, value.toString)
           }
         }
@@ -192,13 +211,14 @@ object EventDrivenAggregationTopo extends StrictLogging {
 
       var ctx: ProcessorContext[String, String] = _
       var store: KeyValueStore[String, String]  = _
-      // var store: KeyValueStore[String, SensorDataAggregation]  = _
+      var store2: KeyValueStore[String, SensorDataAggregation]  = _
       var cancellablePunctuator: Cancellable    = _
 
       override def init(context: ProcessorContext[String, String]): Unit = {
         logger.info("initializing change trigger processor")
         ctx = context
         store = ctx.getStateStore(storeName)
+        store2 = ctx.getStateStore(storeName + "2")
 
         cancellablePunctuator = ctx.schedule(
           Duration.ofMillis(1000),
@@ -215,18 +235,29 @@ object EventDrivenAggregationTopo extends StrictLogging {
         logger.info(s"change for ${trigger.name} detected: ")
         logger.info(s"from ${trigger.before} to ${trigger.after} detected at ${trigger.ts} ")
 
-        val currentValue: String = Option(store.get(record.key())).getOrElse("")
-        if (currentValue.nonEmpty) {
+        val currentValue: Option[String] = Option(store.get(machineId))
+
+        currentValue foreach { v =>
           logger.info(s"change triggers output forwarding: ${currentValue}")
           val forwardedRecord: Record[String, String] =
-            new Record(record.key(), currentValue, trigger.ts)
+            new Record(machineId, v, trigger.ts)
           ctx.forward(forwardedRecord)
-          logger.info("resetting state store for record.key()")
-          store.put(record.key(), "")
-        } else {
-          logger.info(s"initializing state store value for ${record.key()} with 0")
-          store.put(record.key(), "0")
+
+          val currentAgg = store2.get(machineId)
+          val forwardedRecord2: Record[String, SensorDataAggregation] =
+            new Record(machineId, currentAgg, trigger.ts)
+            logger.info(s"forwarding aggregation $currentAgg")
+          //ctx.forward(forwardedRecord)
         }
+          logger.info(s"(re)initializing state store value for ${machineId} with 0")
+          initStoreFor(machineId, trigger)
+          store.put(machineId, "0")
+      }
+
+      def initStoreFor(machineId: String, trigger: MachineTrigger): Unit = {
+        val newAggregation = SensorDataAggregation(machineId, trigger, dummyTrigger, 0, trigger.ts)
+        logger.info(s"(re)initializing state store value for ${machineId} with $newAggregation")
+        store2.put(machineId, newAggregation)
       }
 
       val deleteIfPeriodTooLongPunctuator: Punctuator = (ts: Long) => {
