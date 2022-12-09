@@ -31,6 +31,8 @@ case class SensorDataAggregation(
     sensorSum: Int,
     ts: Long
 )
+case class AggregationConfig(factorOldValue: Double = 1.0, factorNewValue: Double = 1.0)
+case class TriggerPunctuatorConfig(inactivityCheckPeriod: Long, warnTimeoutMs: Long, warnOnInactivity: Boolean = true)
 
 object EventDrivenAggregationTopo extends StrictLogging {
 
@@ -60,7 +62,8 @@ object EventDrivenAggregationTopo extends StrictLogging {
       triggerTopic: String,
       outputTopic: String,
       storeName: String,
-      sensorName: String
+      sensorName: String,
+      inactivityCheckPeriod: Long
   ): Topology = {
 
     val aggregationStoreBuilder: StoreBuilder[KeyValueStore[String, SensorDataAggregation]] =
@@ -91,12 +94,12 @@ object EventDrivenAggregationTopo extends StrictLogging {
       )
       .addProcessor(
         dataProcessorName,
-        () => dataProcessor(storeName, sensorName),
+        () => makeMachineDataProcessor(storeName, sensorName),
         dataInputSourceName
       )
       .addProcessor(
         triggerProcessorName,
-        () => triggerProcessor(storeName),
+        () => makeTriggerProcessor(storeName, inactivityCheckPeriod),
         triggerInputSourceName
       )
       .addStateStore(aggregationStoreBuilder, dataProcessorName, triggerProcessorName)
@@ -117,7 +120,8 @@ object EventDrivenAggregationTopo extends StrictLogging {
       triggerTopic: String,
       outputTopic: String,
       storeName: String,
-      sensorName: String
+      sensorName: String,
+      inactivityCheckPeriod: Long
   ): Topology = {
 
     val aggregationStoreBuilder: StoreBuilder[KeyValueStore[String, SensorDataAggregation]] =
@@ -126,7 +130,6 @@ object EventDrivenAggregationTopo extends StrictLogging {
         stringSerde,
         aggregationSerde
       )
-
     builder.addStateStore(aggregationStoreBuilder)
 
     val dataStream: KStream[String, MachineData] =
@@ -135,12 +138,12 @@ object EventDrivenAggregationTopo extends StrictLogging {
       builder.stream(triggerTopic)(Consumed.`with`(stringSerde, triggerSerde))
 
     dataStream.process[String, SensorDataAggregation](
-      () => dataProcessor(storeName, sensorName),
+      () => makeMachineDataProcessor(storeName, sensorName),
       storeName
     )
     val aggregationStream =
       triggerStream.process[String, SensorDataAggregation](
-        () => triggerProcessor(storeName),
+        () => makeTriggerProcessor(storeName, inactivityCheckPeriod),
         storeName
       )
 
@@ -149,58 +152,55 @@ object EventDrivenAggregationTopo extends StrictLogging {
     builder.build()
   }
 
-  def dataProcessor(
+  def makeMachineDataProcessor(
       storeName: String,
-      sensorName: String
+      sensorName: String,
   ): Processor[String, MachineData, String, SensorDataAggregation] =
     new Processor[String, MachineData, String, SensorDataAggregation] {
 
       var ctx: ProcessorContext[String, SensorDataAggregation] = _
       var store: KeyValueStore[String, SensorDataAggregation]  = _
-      var cancellablePunctuator: Cancellable                   = _
 
       override def init(context: ProcessorContext[String, SensorDataAggregation]): Unit = {
         logger.info("initializing machine data processor - aggregator")
         ctx = context
         store = ctx.getStateStore(storeName)
-
-        cancellablePunctuator = ctx.schedule(
-          Duration.ofMillis(1000),
-          PunctuationType.WALL_CLOCK_TIME,
-          deleteIfPeriodTooLongPunctuator
-        )
       }
 
       override def process(record: Record[String, MachineData]): Unit = {
         val data      = record.value()
         val machineId = record.key()
         logger.info(s"processing data: $machineId $data")
-        val maybeSensorValue: Option[Int] =
-          data.sensorData.asScala.find(sensor => sensorName == sensor.name).map(_.value)
-        maybeSensorValue map { value: Int =>
-          Option(store.get(machineId)) map (c => updateAggregation(c, value, data.ts)) getOrElse logger.warn(
-            s"no current aggregation found for $machineId and sensor $sensorName at ${record
-              .timestamp()}. Ignoring event. Current value $value"
-          )
-        } getOrElse logger.warn(
-          s"no sensor value ford for sensor $sensorName in $machineId at ${record.timestamp()}. Ignoring event"
+        Option(store.get(machineId)) map (c => updateAggregation(c, data)) getOrElse logger.warn(
+          s"no current aggregation found for $machineId and sensor $sensorName at ${record
+            .timestamp()}. Ignoring event."
         )
       }
 
-      val deleteIfPeriodTooLongPunctuator: Punctuator = (ts: Long) => {
-        logger.info(s"data processor punctuator at $ts")
-      }
+      // TODO - add generate warning event to warning topic on aggregation passing threshold
 
-      def updateAggregation(currentAgg: SensorDataAggregation, value: Int, newTS: Long): Unit = {
-        val newAgg = currentAgg.copy(sensorSum = currentAgg.sensorSum + value, ts = newTS)
-        logger.info(s"adding $value to current: ${currentAgg.sensorSum}")
-        logger.info(s"current aggregation for ${currentAgg.name}: $newAgg")
-        store.put(currentAgg.name, newAgg)
+      def updateAggregation(currentAgg: SensorDataAggregation, newData: MachineData): Unit = {
+
+        val maybeSensorValue: Option[Int] =
+          newData.sensorData.asScala.find(sensor => sensorName == sensor.name).map(_.value)
+
+        // TODO - fetch configurable multiplication factor from config state store here
+
+        maybeSensorValue map { value: Int =>
+          val newAgg = currentAgg.copy(sensorSum = currentAgg.sensorSum + value, ts = newData.ts)
+
+          logger.info(s"updating $value to current: ${currentAgg.sensorSum}")
+          logger.info(s"current aggregation for ${currentAgg.name}: $newAgg")
+          store.put(currentAgg.name, newAgg)
+        } getOrElse logger.warn(
+          s"no sensor value ford for sensor $sensorName in ${newData.name} with timestamp ${newData.ts}. Ignoring event"
+        )
       }
     }
 
-  def triggerProcessor(
-      storeName: String
+  def makeTriggerProcessor(
+      storeName: String,
+      inactivityCheckPeriod: Long
   ): Processor[String, MachineTrigger, String, SensorDataAggregation] =
     new Processor[String, MachineTrigger, String, SensorDataAggregation] {
 
@@ -208,15 +208,20 @@ object EventDrivenAggregationTopo extends StrictLogging {
       var store: KeyValueStore[String, SensorDataAggregation]  = _
       var cancellablePunctuator: Cancellable                   = _
 
+      // TODO - replace with value from config state store
+      var punctuatorConfig = TriggerPunctuatorConfig(1000, 3000)
+
       override def init(context: ProcessorContext[String, SensorDataAggregation]): Unit = {
         logger.info("initializing change trigger processor")
         ctx = context
         store = ctx.getStateStore(storeName)
 
+        // TODO - make punctuator configurable through an additional config topic:
+        // configure warn timeout or disable warn timeout
         cancellablePunctuator = ctx.schedule(
-          Duration.ofMillis(1000),
+          Duration.ofMillis(inactivityCheckPeriod),
           PunctuationType.WALL_CLOCK_TIME,
-          deleteIfPeriodTooLongPunctuator
+          forwardIfNoTriggerForTooLongPunctuator
         )
       }
 
@@ -224,8 +229,8 @@ object EventDrivenAggregationTopo extends StrictLogging {
         val trigger   = record.value()
         val machineId = record.key()
 
-        logger.info(s"change for ${trigger.name} detected: ")
-        logger.info(s"from ${trigger.before} to ${trigger.after} detected at ${trigger.ts} ")
+        logger.info(s"change event for ${trigger.name} detected: ")
+        logger.info(s"processing change from ${trigger.before} to ${trigger.after} at ${trigger.ts} ")
 
         val currentValue: Option[SensorDataAggregation] = Option(store.get(machineId))
 
@@ -241,12 +246,22 @@ object EventDrivenAggregationTopo extends StrictLogging {
 
       def initStoreFor(machineId: String, trigger: MachineTrigger): Unit = {
         val newAggregation = SensorDataAggregation(machineId, trigger, dummyTrigger, 0, trigger.ts)
-        logger.info(s"(re)initializing state store value for $machineId with $newAggregation")
+        logger.info(s"initializing state store value for $machineId with $newAggregation")
         store.put(machineId, newAggregation)
       }
 
-      val deleteIfPeriodTooLongPunctuator: Punctuator = (ts: Long) => {
-        logger.info(s"change trigger processor punctuator at $ts")
+      val forwardIfNoTriggerForTooLongPunctuator: Punctuator = (ts: Long) => {
+        if(punctuatorConfig.warnOnInactivity) {
+          val warnForTheseInactiveAggregations = store.all.asScala.map{kv =>
+            (ts - kv.value.ts, kv)
+          }.filter( _._1 > punctuatorConfig.warnTimeoutMs).toList
+          logger.info(s"forwardIfNoTriggerForTooLongPunctuator at $ts found ${warnForTheseInactiveAggregations.size} idle aggregations to warn on")
+          warnForTheseInactiveAggregations foreach { case (idleTs, agg) =>
+            logger.warn(s"${agg.value.name} inactive for $idleTs ms - dispatching inactivity warning")
+            // TODO - forward to warn topic
+            // optionally, delete from store
+          }
+        }
       }
     }
 
