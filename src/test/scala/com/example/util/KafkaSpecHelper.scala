@@ -1,11 +1,18 @@
 package com.example.util
 
-import org.apache.kafka.clients.admin.{AdminClient, CreateTopicsResult, DeleteTopicsResult, ListTopicsOptions, NewTopic, TopicDescription}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerRecords}
+import org.apache.kafka.clients.admin.{
+  AdminClient,
+  CreateTopicsResult,
+  DeleteTopicsResult,
+  ListTopicsOptions,
+  NewTopic,
+  TopicDescription
+}
+import org.apache.kafka.clients.consumer.{ Consumer, ConsumerRecord, ConsumerRecords }
 import org.apache.kafka.common.config.TopicConfig
 import wvlet.log.LogSupport
 
-import java.{time, util}
+import java.{ time, util }
 import java.util.Collections
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -178,8 +185,12 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
   }
 
   def printTopicsAndPartitions(adminClient: AdminClient): Unit = {
-    val names = Await.result(adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().toScalaFuture, 10.seconds)
-    val desc: util.Map[String, TopicDescription] = adminClient.describeTopics(names).allTopicNames().get()
+    val names = Await.result(
+      adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().toScalaFuture,
+      10.seconds
+    )
+    val desc: util.Map[String, TopicDescription] =
+      adminClient.describeTopics(names).allTopicNames().get()
 
     println("topics:")
     desc.asScala foreach { s =>
@@ -190,6 +201,5 @@ object KafkaSpecHelper extends LogSupport with FutureConverter {
       }
     }
   }
-
 
 }

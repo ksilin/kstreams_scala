@@ -1,18 +1,18 @@
 package com.example.join
 
-import com.example.serde.{GsonDeserializer, GsonSerializer}
+import com.example.serde.{ GsonDeserializer, GsonSerializer }
 import com.example.SpecBase
 import com.example.util.KafkaSpecHelper
 import io.circe.generic.auto._
 import nequi.circe.kafka._
-import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
+import net.christophschubert.cp.testcontainers.{ CPTestContainerFactory, ConfluentServerContainer }
 import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord, KafkaConsumer }
+import org.apache.kafka.clients.producer.{ KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.Serdes.WrapperSerde
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
+import org.apache.kafka.common.serialization.{ Deserializer, Serde, Serializer }
 import org.apache.kafka.streams._
-import org.apache.kafka.streams.kstream.{Named, ValueJoiner}
+import org.apache.kafka.streams.kstream.{ Named, ValueJoiner }
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.testcontainers.containers.Network
@@ -29,9 +29,9 @@ import _root_.scala.util.Random
 
   With a slightly more complex topology, things get weird:
 
-  * no joins
-  * stream-table join - not convenient, since only table-table & stream-globalKtable joins support FK joins
-  * table-table join - shoudl work
+ * no joins
+ * stream-table join - not convenient, since only table-table & stream-globalKtable joins support FK joins
+ * table-table join - shoudl work
  */
 class FlatMapJoinTombstonesSpec extends SpecBase {
 
@@ -83,25 +83,27 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
   KafkaSpecHelper.createTopic(adminClient, parcelEventsInputTopicName, 1, 1)
   KafkaSpecHelper.createTopic(adminClient, outputTopicName, 1, 1)
 
+  private val consumedParcelIput: Consumed[String, ParcelEvent] =
+    Consumed.`with`(Serdes.stringSerde, parcelSerde).withName("parcelEventInput")
+  private val consumedAddressInput: Consumed[String, Address] =
+    Consumed.`with`(Serdes.stringSerde, addressSerde).withName("addressInput")
 
-  private val consumedParcelIput: Consumed[String, ParcelEvent] = Consumed.`with`(Serdes.stringSerde, parcelSerde).withName("parcelEventInput")
-  private val consumedAddressInput: Consumed[String, Address] = Consumed.`with`(Serdes.stringSerde, addressSerde).withName("addressInput")
-
-  private val parcelEventAddressJoiner: ValueJoiner[ParcelEvent, Address, ParcelEvent] = (parcel: ParcelEvent, addr: Address) => {
-    if (parcel == null) {
-      warn("tombstone event made it to the join")
+  private val parcelEventAddressJoiner: ValueJoiner[ParcelEvent, Address, ParcelEvent] =
+    (parcel: ParcelEvent, addr: Address) => {
+      if (parcel == null) {
+        warn("tombstone event made it to the join")
+      }
+      info(s"joining $parcel with $addr")
+      // parcel.copy(address=addr) throws an exception
+      ParcelEvent(
+        id = parcel.id,
+        addressId = parcel.addressId: String,
+        address = addr,
+        event = parcel.event,
+        createdAt = parcel.createdAt,
+        updatedAt = System.currentTimeMillis()
+      )
     }
-    info(s"joining $parcel with $addr")
-    // parcel.copy(address=addr) throws an exception
-    ParcelEvent(
-      id = parcel.id,
-      addressId = parcel.addressId: String,
-      address = addr,
-      event = parcel.event,
-      createdAt = parcel.createdAt,
-      updatedAt = System.currentTimeMillis()
-    )
-  }
 
   "must process all records and tombstones in sequence" in {
 
@@ -123,12 +125,13 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
       parcelDeserializer
     )
     consumer.subscribe(List(outputTopicName).asJavaCollection)
-    val records: Iterable[ConsumerRecord[String, ParcelEvent]] = KafkaSpecHelper.fetchAndProcessRecords(
-      consumer,
-      pause = 500,
-      maxAttempts = 10,
-      abortOnFirstRecord = false
-    )
+    val records: Iterable[ConsumerRecord[String, ParcelEvent]] =
+      KafkaSpecHelper.fetchAndProcessRecords(
+        consumer,
+        pause = 500,
+        maxAttempts = 10,
+        abortOnFirstRecord = false
+      )
     records.foreach(r => warn(r))
     streams.close()
   }
@@ -152,12 +155,13 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
       parcelDeserializer
     )
     consumer.subscribe(List(outputTopicName).asJavaCollection)
-    val records: Iterable[ConsumerRecord[String, ParcelEvent]] = KafkaSpecHelper.fetchAndProcessRecords(
-      consumer,
-      pause = 500,
-      maxAttempts = 10,
-      abortOnFirstRecord = false
-    )
+    val records: Iterable[ConsumerRecord[String, ParcelEvent]] =
+      KafkaSpecHelper.fetchAndProcessRecords(
+        consumer,
+        pause = 500,
+        maxAttempts = 10,
+        abortOnFirstRecord = false
+      )
     records.foreach(r => warn(r))
     streams.close()
   }
@@ -167,7 +171,8 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
     val parcelEventStream: KStream[String, ParcelEvent] =
       builder.stream(parcelEventsInputTopicName)(consumedParcelIput)
 
-    val addressStream: KStream[String, Address] = builder.stream(addressInputTopicName)(consumedAddressInput)
+    val addressStream: KStream[String, Address] =
+      builder.stream(addressInputTopicName)(consumedAddressInput)
 
     val addrTable: KTable[String, Address] = addressStream.toTable(Named.as("addresses"))
 
@@ -226,9 +231,6 @@ class FlatMapJoinTombstonesSpec extends SpecBase {
 
     builder.build()
   }
-
-
-
 
   private def produceAddresses(addressIds: List[String]): Unit = {
 

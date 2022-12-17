@@ -43,7 +43,7 @@ class WindowedKeyValueStoreSupplierSpec extends SpecBase {
         MyRecord(
           s"${i}_${Random.alphanumeric.take(5).mkString}",
           s"${i}_${Random.alphanumeric.take(10).mkString}",
-          (now - 10000L +  i * 1000L)
+          (now - 10000L + i * 1000L)
         )
       )
     )
@@ -57,7 +57,7 @@ class WindowedKeyValueStoreSupplierSpec extends SpecBase {
     val (inputTopic, outputTopic) =
       prepTestTopics(topologyTestDriver, inputTopicName, outputTopicName)
 
-    data foreach {kv =>
+    data foreach { kv =>
       inputTopic.pipeInput(kv.key, kv.value, kv.value.timestamp)
       Thread.sleep(100)
     }

@@ -4,11 +4,11 @@ import com.example.SpecBase
 import com.example.util.KafkaSpecHelper
 import io.circe.generic.auto._
 import nequi.circe.kafka._
-import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
+import net.christophschubert.cp.testcontainers.{ CPTestContainerFactory, ConfluentServerContainer }
 import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
+import org.apache.kafka.clients.producer.{ KafkaProducer, ProducerRecord }
+import org.apache.kafka.common.serialization.{ Deserializer, Serde, Serializer }
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.kstream.Named
 import org.apache.kafka.streams.scala.kstream._
@@ -16,7 +16,7 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.testcontainers.containers.Network
-import org.testcontainers.containers.output.{OutputFrame, WaitingConsumer}
+import org.testcontainers.containers.output.{ OutputFrame, WaitingConsumer }
 
 import java.util.concurrent.TimeUnit
 import _root_.scala.util.Random
@@ -50,8 +50,13 @@ class CogroupSpec extends SpecBase {
 
   broker.followOutput(logConsumer, OutputFrame.OutputType.STDOUT)
 
-  logConsumer.waitUntil({ frame: OutputFrame =>
-    frame.getUtf8String.contains("started")}, 60, TimeUnit.SECONDS)
+  logConsumer.waitUntil(
+    { frame: OutputFrame =>
+      frame.getUtf8String.contains("started")
+    },
+    60,
+    TimeUnit.SECONDS
+  )
 
   private val bootstrap: String = broker.getBootstrapServers
 
@@ -62,8 +67,8 @@ class CogroupSpec extends SpecBase {
 
   private val customerOutputTopicName = "customerOutputTopic"
 
-  private val itemSerializer: Serializer[LineItem]     = implicitly
-  private val itemSerde: Serde[LineItem]               = implicitly
+  private val itemSerializer: Serializer[LineItem] = implicitly
+  private val itemSerde: Serde[LineItem]           = implicitly
 
   streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, suiteName)
   streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap)
@@ -79,7 +84,7 @@ class CogroupSpec extends SpecBase {
   }
 
   val records: Seq[ProducerRecord[String, LineItem]] = lineItems map { item =>
-    val topic = Random.shuffle(topics).head
+    val topic    = Random.shuffle(topics).head
     val customer = Random.shuffle(customerIds).head
     new ProducerRecord[String, LineItem](topic, customer, item)
   }
@@ -104,7 +109,12 @@ class CogroupSpec extends SpecBase {
     val streams = new KafkaStreams(topology, streamsConfiguration)
     streams.start()
 
-    KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, maxAttempts = 10, abortOnFirstRecord = false)
+    KafkaSpecHelper.fetchAndProcessRecords(
+      consumer,
+      pause = 500,
+      maxAttempts = 10,
+      abortOnFirstRecord = false
+    )
 
     streams.close()
   }
@@ -132,11 +142,15 @@ class CogroupSpec extends SpecBase {
     val streams = new KafkaStreams(topology, streamsConfiguration)
     streams.start()
 
-    KafkaSpecHelper.fetchAndProcessRecords(consumer, pause = 500, maxAttempts = 10, abortOnFirstRecord = false)
+    KafkaSpecHelper.fetchAndProcessRecords(
+      consumer,
+      pause = 500,
+      maxAttempts = 10,
+      abortOnFirstRecord = false
+    )
 
     streams.close()
   }
-
 
   private def produceTestData(records: Seq[ProducerRecord[String, LineItem]]): Unit = {
     val lineItemProducer = new KafkaProducer[String, LineItem](
@@ -146,8 +160,8 @@ class CogroupSpec extends SpecBase {
     )
     records foreach { r =>
       info(s"producing record for customer ${r.key()}: ${r.value()}")
-        lineItemProducer.send(r).get()
-  }
+      lineItemProducer.send(r).get()
+    }
   }
 
   def makeCogroupTopology(): Topology = {
@@ -177,17 +191,22 @@ class CogroupSpec extends SpecBase {
         groupedWishlist,
         { case (customerName, item, customer) =>
           info(s"cogrouping wishlist: $customerName, $item, $customer")
-          customer.copy(name = customerName, wishlist = item :: customer.wishlist) }
+          customer.copy(name = customerName, wishlist = item :: customer.wishlist)
+        }
       )
       .cogroup[LineItem](
         groupedCart,
         { case (customerName, item, customer) =>
           info(s"cogrouping cart: $customerName, $item, $customer")
-          customer.copy(name = customerName, cart = item :: customer.cart) }
+          customer.copy(name = customerName, cart = item :: customer.cart)
+        }
       )
       .aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) // Materialized implicit
 
-    customerTable.toStream(Named.as("outStream")).peek{ case (k, v) => info(s"writing $k : $v to $customerOutputTopicName")}.to(customerOutputTopicName)
+    customerTable
+      .toStream(Named.as("outStream"))
+      .peek { case (k, v) => info(s"writing $k : $v to $customerOutputTopicName") }
+      .to(customerOutputTopicName)
 
     builder.build()
   }
@@ -206,45 +225,55 @@ class CogroupSpec extends SpecBase {
       Consumed.`with`(Serdes.stringSerde, itemSerde).withName("cartInput2")
     )
 
-    val groupedPurchases: KGroupedStream[String, LineItem] = purchaseStream.groupByKey(Grouped.`with`("groupedPurchase2"))
-    val groupedWishlist  = wishlistStream.groupByKey(Grouped.`with`("groupedWishlist2"))
-    val groupedCart      = cartStream.groupByKey(Grouped.`with`("groupedCart2"))
+    val groupedPurchases: KGroupedStream[String, LineItem] =
+      purchaseStream.groupByKey(Grouped.`with`("groupedPurchase2"))
+    val groupedWishlist = wishlistStream.groupByKey(Grouped.`with`("groupedWishlist2"))
+    val groupedCart     = cartStream.groupByKey(Grouped.`with`("groupedCart2"))
 
-
-    val aggregatedPurchases: KTable[String, Customer] = groupedPurchases.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)){
-      (name, item, customer) =>
-        info(s"aggregating purchases: $name, $item, $customer")
-        customer.copy(name = name, purchases = item :: customer.purchases)
-    }
-    val aggregatedWishlist: KTable[String, Customer] = groupedWishlist.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) {
-      (name, item, customer) =>
-      info(s"aggregating wishlist: $name, $item, $customer")
-      customer.copy(name = name, wishlist = item :: customer.wishlist)
-    }
-    val aggregatedCart: KTable[String, Customer] = groupedCart.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)){
-      (name, item, customer) =>
-        info(s"aggregating cart: $name, $item, $customer")
-        customer.copy(name = name, cart = item :: customer.cart)
-    }
+    val aggregatedPurchases: KTable[String, Customer] =
+      groupedPurchases.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) {
+        (name, item, customer) =>
+          info(s"aggregating purchases: $name, $item, $customer")
+          customer.copy(name = name, purchases = item :: customer.purchases)
+      }
+    val aggregatedWishlist: KTable[String, Customer] =
+      groupedWishlist.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) {
+        (name, item, customer) =>
+          info(s"aggregating wishlist: $name, $item, $customer")
+          customer.copy(name = name, wishlist = item :: customer.wishlist)
+      }
+    val aggregatedCart: KTable[String, Customer] =
+      groupedCart.aggregate(Customer("CUSTOMER_NAME_PLACEHOLDER", Nil, Nil, Nil)) {
+        (name, item, customer) =>
+          info(s"aggregating cart: $name, $item, $customer")
+          customer.copy(name = name, cart = item :: customer.cart)
+      }
 
     val fullCustomer: KTable[String, Customer] = aggregatedPurchases
-      .outerJoin(aggregatedWishlist){ (customerPurchase, customerWishList) =>
+      .outerJoin(aggregatedWishlist) { (customerPurchase, customerWishList) =>
         info(s"joining: customerPurchase: $customerPurchase, customerWishList: $customerWishList")
-        val name = if (null == customerPurchase) customerWishList.name else customerPurchase.name
+        val name      = if (null == customerPurchase) customerWishList.name else customerPurchase.name
         val purchases = if (null == customerPurchase) Nil else customerPurchase.purchases
-        val wishList = if (null == customerWishList) Nil else customerWishList.wishlist
+        val wishList  = if (null == customerWishList) Nil else customerWishList.wishlist
         Customer(name, Nil, wishList, purchases)
       }
-      .outerJoin(aggregatedCart){ (customerPurshaseWishlist, customerCart) =>
-        info(s"joining: customerPurshaseWishlist: $customerPurshaseWishlist, customerCart: $customerCart")
+      .outerJoin(aggregatedCart) { (customerPurshaseWishlist, customerCart) =>
+        info(
+          s"joining: customerPurshaseWishlist: $customerPurshaseWishlist, customerCart: $customerCart"
+        )
         val name = if (null == customerCart) customerPurshaseWishlist.name else customerCart.name
-        val purchases = if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.purchases
-        val wishList = if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.wishlist
+        val purchases =
+          if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.purchases
+        val wishList =
+          if (null == customerPurshaseWishlist) Nil else customerPurshaseWishlist.wishlist
         val cart = if (null == customerCart) Nil else customerCart.cart
         Customer(name, cart, wishList, purchases)
       }
 
-    fullCustomer.toStream(Named.as("outStream2")).peek{ case (k, v) => info(s"writing $k : $v to $customerOutputTopicName")}.to(customerOutputTopicName)
+    fullCustomer
+      .toStream(Named.as("outStream2"))
+      .peek { case (k, v) => info(s"writing $k : $v to $customerOutputTopicName") }
+      .to(customerOutputTopicName)
 
     builder.build()
   }
@@ -329,6 +358,5 @@ class CogroupSpec extends SpecBase {
     Sink: KSTREAM-SINK-0000000017 (topic: customerOutputTopic)
       <-- KSTREAM-PEEK-0000000016
    */
-
 
 }

@@ -122,7 +122,7 @@ object EventDrivenAggregationTopo extends StrictLogging {
         () => makeTriggerProcessor(aggregationStoreName, aggregationResultTopic),
         triggerInputSourceName
       )
-      // HAS to have a parents although processes no data
+      // HAS to have a parents although processes no data from topics
       // org.apache.kafka.streams.errors.TopologyException: Invalid topology: Processor idleAggregationWarningProcessor must have at least one parent
       .addProcessor(
         idleAggregationWarningProcessorName,

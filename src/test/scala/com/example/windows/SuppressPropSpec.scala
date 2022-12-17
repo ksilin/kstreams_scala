@@ -1,7 +1,7 @@
 package com.example.windows
 
 import com.example.SpecBase
-import net.christophschubert.cp.testcontainers.{CPTestContainerFactory, ConfluentServerContainer}
+import net.christophschubert.cp.testcontainers.{ CPTestContainerFactory, ConfluentServerContainer }
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -31,7 +31,8 @@ class SuppressPropSpec extends SpecBase with ParallelTestExecution {
     parcelSerializer
   )
 
-  val streamsCtx = streamsContext(adminClient, parcelInputTopicName, outputTopicName, streamsConfiguration) _
+  val streamsCtx =
+    streamsContext(adminClient, parcelInputTopicName, outputTopicName, streamsConfiguration) _
 
   "expect one final event per parcel after window closes - testcontainer, simple time progress, session window, unbounded suppression" - {
 
@@ -44,8 +45,15 @@ class SuppressPropSpec extends SpecBase with ParallelTestExecution {
         forAll(suppressTable) { suppress =>
           // whenever(suppress.)
           streamsCtx(suppress) { s =>
-            produceTestDataSync(parcelCreatedProducer, parcelInputTopicName, parcelIds.take(1), 1, startTime)
-            val records = getResultData(makeParcelConsumer(streamsConfiguration), outputTopicName, 200, 3, true)
+            produceTestDataSync(
+              parcelCreatedProducer,
+              parcelInputTopicName,
+              parcelIds.take(1),
+              1,
+              startTime
+            )
+            val records =
+              getResultData(makeParcelConsumer(streamsConfiguration), outputTopicName, 200, 3, true)
             records.isEmpty mustBe true
           }
         }
@@ -55,8 +63,15 @@ class SuppressPropSpec extends SpecBase with ParallelTestExecution {
 
         forEvery(suppressTable) { suppress =>
           streamsCtx(suppress) { s =>
-            produceTestDataSync(parcelCreatedProducer, parcelInputTopicName, parcelIds.take(1), 3, startTime)
-            val records = getResultData(makeParcelConsumer(streamsConfiguration), outputTopicName, 200, 3, true)
+            produceTestDataSync(
+              parcelCreatedProducer,
+              parcelInputTopicName,
+              parcelIds.take(1),
+              3,
+              startTime
+            )
+            val records =
+              getResultData(makeParcelConsumer(streamsConfiguration), outputTopicName, 200, 3, true)
             records foreach (r => info(r))
             records.size mustBe 1
           }

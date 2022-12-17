@@ -1,13 +1,13 @@
 package com.example.json
 
-import com.example.{SpecBase, Translation}
+import com.example.{ SpecBase, Translation }
 import io.circe.generic.auto._
 import nequi.circe.kafka._
-import org.apache.kafka.common.serialization.{Deserializer, Serdes, Serializer}
+import org.apache.kafka.common.serialization.{ Deserializer, Serdes, Serializer }
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.kstream.{KStream, KTable}
+import org.apache.kafka.streams.scala.kstream.{ KStream, KTable }
 import org.apache.kafka.streams.scala.serialization.Serdes._
-import org.apache.kafka.streams.{TestInputTopic, TestOutputTopic, Topology, TopologyTestDriver}
+import org.apache.kafka.streams.{ TestInputTopic, TestOutputTopic, Topology, TopologyTestDriver }
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -20,8 +20,7 @@ class CirceKafkaGenericSerdeSpec extends SpecBase {
   val translationInputTopicName  = "translationsInputTopic"
   val translationOutputTopicName = "translationOutputTopic"
 
-
-  val translationSerializer: Serializer[Translation] = implicitly
+  val translationSerializer: Serializer[Translation]     = implicitly
   val translationDeserializer: Deserializer[Translation] = implicitly
   // val translationSerde: Serde[Translation] = implicitly
 

@@ -4,7 +4,7 @@ import com.example.Translation
 
 import java.util.regex.Pattern
 
-case object TestData{
+case object TestData {
 
   val textLines = List(
     "this is the end",
@@ -29,6 +29,5 @@ case object TestData{
     "is"   -> Translation("is", Set("ist")),
     "end"  -> Translation("end", Set("ende", "schluss"))
   )
-
 
 }
