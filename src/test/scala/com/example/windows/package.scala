@@ -1,16 +1,25 @@
 package com.example
 
-import com.example.util.{FutureConverter, KafkaSpecHelper}
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
+import com.example.util.{ FutureConverter, KafkaSpecHelper }
+import org.apache.kafka.common.serialization.{ Deserializer, Serde, Serializer }
 import io.circe.generic.auto._
 import nequi.circe.kafka._
 import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.streams.{KafkaStreams, Topology}
-import org.apache.kafka.streams.kstream.{Named, SessionWindows, Suppressed, Windowed}
+import org.apache.kafka.clients.consumer.{ ConsumerRecord, KafkaConsumer }
+import org.apache.kafka.clients.producer.{ KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.streams.{ KafkaStreams, Topology }
+import org.apache.kafka.streams.kstream.{ Named, SessionWindows, Suppressed, Windowed }
 import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.scala.kstream.{Consumed, Grouped, KGroupedStream, KStream, KTable, Materialized, Produced, SessionWindowedKStream}
+import org.apache.kafka.streams.scala.kstream.{
+  Consumed,
+  Grouped,
+  KGroupedStream,
+  KStream,
+  KTable,
+  Materialized,
+  Produced,
+  SessionWindowedKStream
+}
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import org.scalatest.prop.TableFor1
@@ -19,9 +28,9 @@ import wvlet.log.LogSupport
 import _root_.scala.jdk.CollectionConverters._
 import java.time.Duration
 import java.util.Properties
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{ Await, Future }
 import scala.util.Random
-import java.util.concurrent.{Future => jFuture}
+import java.util.concurrent.{ Future => jFuture }
 import _root_.scala.concurrent.duration._
 import _root_.scala.concurrent.ExecutionContext.Implicits.global
 
@@ -46,23 +55,48 @@ package object windows extends LogSupport {
 
   // shorter, equal and longer than session
   val suppressedUntilTimeLimit1: Suppressed[Windowed[_]] =
-    Suppressed.untilTimeLimit(Duration.ofSeconds(1), Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()).withName("untilOneSec")
+    Suppressed
+      .untilTimeLimit(
+        Duration.ofSeconds(1),
+        Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()
+      )
+      .withName("untilOneSec")
   val suppressedUntilTimeLimit3: Suppressed[Windowed[_]] =
-    Suppressed.untilTimeLimit(Duration.ofSeconds(3), Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()).withName("untilThreeSec")
+    Suppressed
+      .untilTimeLimit(
+        Duration.ofSeconds(3),
+        Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()
+      )
+      .withName("untilThreeSec")
   val suppressedUntilTimeLimit5: Suppressed[Windowed[_]] =
-    Suppressed.untilTimeLimit(Duration.ofSeconds(5), Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()).withName("untilFiveSec")
+    Suppressed
+      .untilTimeLimit(
+        Duration.ofSeconds(5),
+        Suppressed.BufferConfig.maxRecords(1).emitEarlyWhenFull()
+      )
+      .withName("untilFiveSec")
 
+  val suppressTable: TableFor1[Suppressed[Windowed[_]]] = Table(
+    "suppress",
+    suppressedUntilWindowClosesUnbounded,
+    suppressedUntilTimeLimit1,
+    suppressedUntilTimeLimit3,
+    suppressedUntilTimeLimit5
+  )
 
-  val suppressTable: TableFor1[Suppressed[Windowed[_]]] = Table("suppress", suppressedUntilWindowClosesUnbounded, suppressedUntilTimeLimit1, suppressedUntilTimeLimit3, suppressedUntilTimeLimit5)
-
-  def streamsContext(adminClient: AdminClient, inputTopicName: String, outputTopicName: String, streamsConfig: Properties)(suppressed: Suppressed[Windowed[_]])(testCode: (KafkaStreams) => Any): Any = {
+  def streamsContext(
+      adminClient: AdminClient,
+      inputTopicName: String,
+      outputTopicName: String,
+      streamsConfig: Properties
+  )(suppressed: Suppressed[Windowed[_]])(testCode: (KafkaStreams) => Any): Any = {
     info("creating topology with suppressed:")
     info(suppressed.toString) // no way to get the name of a suppressed instance
     KafkaSpecHelper.createOrTruncateTopic(adminClient, inputTopicName, 1, 1)
     KafkaSpecHelper.createOrTruncateTopic(adminClient, outputTopicName, 1, 1)
     val topology = makeTopology(suppressed)
     //System.out.println(topology.describe())
-    val streams  = new KafkaStreams(topology, streamsConfig)
+    val streams = new KafkaStreams(topology, streamsConfig)
     streams.cleanUp()
     streams.start()
 
@@ -74,9 +108,9 @@ package object windows extends LogSupport {
   }
 
   def makeTopology(
-                    suppressConfig: Suppressed[Windowed[_]],
-                    sessionWindowDuration: Duration = Duration.ofSeconds(3)
-                  ): Topology = {
+      suppressConfig: Suppressed[Windowed[_]],
+      sessionWindowDuration: Duration = Duration.ofSeconds(3)
+  ): Topology = {
     val sessionWindows: SessionWindows =
       SessionWindows.ofInactivityGapWithNoGrace(sessionWindowDuration)
 
@@ -124,15 +158,20 @@ package object windows extends LogSupport {
 
   def expDelay(i: Int, j: Int): Long = i * 1001 + (Math.pow(2, j) * 1001).toLong
 
-  def makeParcelConsumer(streamsConfig: Properties): KafkaConsumer[String, Parcel] = {
+  def makeParcelConsumer(streamsConfig: Properties): KafkaConsumer[String, Parcel] =
     new KafkaConsumer[String, Parcel](
       streamsConfig,
       Serdes.stringSerde.deserializer(),
       parcelDeserializer
     )
-  }
 
-  def getResultData(consumer: KafkaConsumer[String, Parcel], topic: String, pause: Int = 500, maxAttempts: Int = 10, abortOnFirstRecord: Boolean = false ): Iterable[ConsumerRecord[String, Parcel]] = {
+  def getResultData(
+      consumer: KafkaConsumer[String, Parcel],
+      topic: String,
+      pause: Int = 500,
+      maxAttempts: Int = 10,
+      abortOnFirstRecord: Boolean = false
+  ): Iterable[ConsumerRecord[String, Parcel]] = {
     consumer.subscribe(List(topic).asJavaCollection)
     KafkaSpecHelper.fetchAndProcessRecords(
       consumer,
@@ -143,12 +182,12 @@ package object windows extends LogSupport {
   }
 
   def produceTestDataSync(
-                           producer: KafkaProducer[String, Parcel],
-                           topic: String,
-                           parcelIds: List[String],
-                           recordsPerId: Int = 1,
-                           initTime: Long = System.currentTimeMillis()
-                         ): Unit = {
+      producer: KafkaProducer[String, Parcel],
+      topic: String,
+      parcelIds: List[String],
+      recordsPerId: Int = 1,
+      initTime: Long = System.currentTimeMillis()
+  ): Unit = {
     val recordsSent = produceTestData(producer, topic, parcelIds, recordsPerId, initTime)
     val recordsMeta = Await.result(recordsSent, 10.seconds)
     recordsMeta foreach { case (id, part, now, meta) =>
@@ -157,32 +196,35 @@ package object windows extends LogSupport {
   }
 
   def produceTestData(
-                       producer: KafkaProducer[String, Parcel],
-                       topic: String,
-                       parcelIds: List[String],
-                       recordsPerId: Int = 1,
-                       initTime: Long = System.currentTimeMillis()
-                     ): Future[Seq[(String, String, Long, RecordMetadata)]] = {
-    val recordsSent: Seq[(String, String, Long, jFuture[RecordMetadata])] = (1 to recordsPerId) flatMap { parcelPartIndex =>
-      parcelIds.zipWithIndex map { case (id, parcelIndex) =>
-        val now = initTime + expDelay(parcelIndex, parcelPartIndex)
-        val randomParcelPart = Random.alphanumeric.take(3).mkString
-        val parcel = Parcel(id, List(randomParcelPart), now, now)
-        val record = new ProducerRecord[String, Parcel](topic, null, now, id, parcel)
-        (id, randomParcelPart, now, producer.send(record))
+      producer: KafkaProducer[String, Parcel],
+      topic: String,
+      parcelIds: List[String],
+      recordsPerId: Int = 1,
+      initTime: Long = System.currentTimeMillis()
+  ): Future[Seq[(String, String, Long, RecordMetadata)]] = {
+    val recordsSent: Seq[(String, String, Long, jFuture[RecordMetadata])] =
+      (1 to recordsPerId) flatMap { parcelPartIndex =>
+        parcelIds.zipWithIndex map { case (id, parcelIndex) =>
+          val now              = initTime + expDelay(parcelIndex, parcelPartIndex)
+          val randomParcelPart = Random.alphanumeric.take(3).mkString
+          val parcel           = Parcel(id, List(randomParcelPart), now, now)
+          val record           = new ProducerRecord[String, Parcel](topic, null, now, id, parcel)
+          (id, randomParcelPart, now, producer.send(record))
+        }
       }
-    }
-    val recordsSentScala = recordsSent.map{case (id, part, now, jFuture: jFuture[RecordMetadata]) =>
-      FutureConverter.toScalaFuture(jFuture).map(recordMeta => (id, part, now, recordMeta))
+    val recordsSentScala = recordsSent.map {
+      case (id, part, now, jFuture: jFuture[RecordMetadata]) =>
+        FutureConverter.toScalaFuture(jFuture).map(recordMeta => (id, part, now, recordMeta))
     }
     Future.sequence(recordsSentScala)
   }
 
-  private def produceSeqTestData(producer: KafkaProducer[String, Parcel],
-                                  parcelIds: List[String],
-                                  recordsPerId: Int = 1,
-                                  initTime: Long = System.currentTimeMillis()
-                                ): Unit =
+  private def produceSeqTestData(
+      producer: KafkaProducer[String, Parcel],
+      parcelIds: List[String],
+      recordsPerId: Int = 1,
+      initTime: Long = System.currentTimeMillis()
+  ): Unit =
     parcelIds.zipWithIndex foreach { case (id, i) =>
       // make more to actually reduce
       (1 to recordsPerId) foreach { j =>

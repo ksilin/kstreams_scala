@@ -21,9 +21,12 @@ import scala.jdk.FutureConverters._
 import scala.jdk.javaapi.CollectionConverters.asJava
 import scala.util.Try
 
-object TopicHelper extends LogSupport {
+case object TopicHelper extends LogSupport {
 
-  val metadataWait             = 2000
+  val retryWaitMs             = 500
+  val metadataWaitMs = 30000
+  val maxRetries = 10
+
   val defaultReplicationFactor = 3 // 3 for cloud, 1 for local would make sense
 
   def createTopic(
@@ -75,7 +78,7 @@ object TopicHelper extends LogSupport {
       topicName: String,
       numberOfPartitions: Int = 1,
       replicationFactor: Short = 3
-  ): Any =
+  ): Either[String, String] =
     if (doesTopicExist(adminClient, topicName)) {
       println(s"truncating topic $topicName")
       truncateTopic(adminClient, topicName, numberOfPartitions, replicationFactor)
@@ -90,92 +93,91 @@ object TopicHelper extends LogSupport {
       )
     }
 
-  def deleteTopic(adminClient: AdminClient, topicName: String): Any =
+  def deleteTopic(adminClient: AdminClient, topicName: String): Either[String, String] =
     deleteTopics(adminClient, List(topicName))
 
-  def deleteTopics(adminClient: AdminClient, topicNames: Iterable[String]): Any = {
+  // Try[Void] or Either[String, String]
+  def deleteTopics(adminClient: AdminClient, topicNames: Iterable[String]): Either[String, String] = {
     info(s"deleting topics $topicNames")
+    // TODO - use Try[Void]
     try {
       val topicDeletionResult: DeleteTopicsResult =
         adminClient.deleteTopics(topicNames.asJavaCollection)
       topicDeletionResult.all().get()
+      Right(s"topics ${topicNames} deleted")
     } catch {
-      case e: Throwable => debug(e)
+      case e: Throwable => {
+        warn(e)
+        Left(s"deletion of topics $topicNames failed: ${e.getMessage}")
+      }
     }
   }
 
-  def deleteTopicsByPrefix(adminClient: AdminClient, topicPrefix: String): Any = {
+  def deleteTopicsByPrefix(adminClient: AdminClient, topicPrefix: String): Either[String, String] = {
 
     val upperCasePrefix = topicPrefix.toUpperCase
 
-    val getTopicNames: Future[util.Set[String]] = adminClient.listTopics().names().toCompletionStage.asScala
-    val topicNames                              = Await.result(getTopicNames, 60.seconds).asScala
+    val getTopicNames: Future[util.Set[String]] =
+      adminClient.listTopics().names().toCompletionStage.asScala
+    val topicNames = Await.result(getTopicNames, metadataWaitMs.seconds).asScala
     val topicsToDelete: mutable.Set[String] =
       topicNames.filter(_.toUpperCase.startsWith(upperCasePrefix))
     deleteTopics(adminClient, topicsToDelete)
   }
 
-  // TODO - eliminate waiting by catching the exceptions on retry
-  val truncateTopic: (AdminClient, String, Int, Short) => Unit =
-    (adminClient: AdminClient, topic: String, partitions: Int, replicationFacor: Short) => {
-
-      val javaTopicSet = asJava(Set(topic))
-      info(s"deleting topic $topic")
-      val deleted: Try[Void] = Try {
-        Await.result(adminClient.deleteTopics(javaTopicSet).all().toCompletionStage.asScala, 10.seconds)
-      }
-      waitForTopicToBeDeleted(adminClient, topic)
-
-      Thread.sleep(metadataWait)
-      info(s"creating topic $topic")
-      val created: Try[Void] = Try {
-        val newTopic =
-          new NewTopic(
-            topic,
-            partitions,
-            replicationFacor
-          ) // need to box the short here to prevent ctor ambiguity
-        val createTopicsResult: CreateTopicsResult = adminClient.createTopics(asJava(Set(newTopic)))
-        Await.result(createTopicsResult.all().toCompletionStage.asScala, 10.seconds)
-      }
-      waitForTopicToExist(adminClient, topic)
-      Thread.sleep(metadataWait)
+  val truncateTopic: (AdminClient, String, Int, Short) => Either[String, String] =
+    (adminClient: AdminClient, topic: String, partitions: Int, replicationFactor: Short) => {
+      for{
+        topicDeleted <- deleteTopic(adminClient, topic)
+        topicConfirmedAsDeleted <- waitForTopicToBeDeleted(adminClient, topic)
+        topicCreated <- createTopic(adminClient, topic, partitions, replicationFactor, skipExistanceCheck = true)
+        topicConfirmedAsCreated <- waitForTopicToExist(adminClient, topic)
+      } yield topicConfirmedAsCreated
     }
 
-  val waitForTopicToExist: (AdminClient, String) => Unit =
-    (adminClient: AdminClient, topic: String) => {
-      var topicExists = false
-      while (!topicExists) {
-        Thread.sleep(100)
-        topicExists = doesTopicExist(adminClient, topic)
-        if (!topicExists) info(s"topic $topic still does not exist")
-      }
-    }
 
-  val waitForTopicToBeDeleted: (AdminClient, String) => Unit =
-    (adminClient: AdminClient, topic: String) => {
-      var topicExists = true
-      while (topicExists) {
-        Thread.sleep(100)
+  val waitForTopicToExist: (AdminClient, String) => Either[String, String] =
+    (adminClient: AdminClient, topic: String) => waitForTopic(adminClient, topic, true)
+
+  val waitForTopicToBeDeleted: (AdminClient, String) => Either[String, String] =
+    (adminClient: AdminClient, topic: String) =>  waitForTopic(adminClient, topic, false)
+
+  val waitForTopic: (AdminClient, String, Boolean) => Either[String, String] =
+    (adminClient: AdminClient, topic: String, toExist: Boolean) => {
+      val condition = if(toExist) "exists" else "is deleted"
+      var topicExists = !toExist
+      var retries = 0
+      while ((topicExists != toExist) && retries < maxRetries) {
+        Thread.sleep(retryWaitMs)
         topicExists = doesTopicExist(adminClient, topic)
-        if (topicExists) info(s"topic $topic still exists")
+        //if (!topicExists) info(s"topic $topic still does not exist")
+        retries = retries + 1
       }
+      if (topicExists == toExist) Right(s"topic $topic $condition")
+      else Left(s"aborting wait until topic $topic $condition after $maxRetries rounds of waiting for $retryWaitMs")
     }
 
   val doesTopicExist: (AdminClient, String) => Boolean =
     (adminClient: AdminClient, topic: String) => {
-      val names = Await.result(adminClient.listTopics().names().toCompletionStage.asScala, 10.seconds)
+      val names =
+        Await.result(adminClient.listTopics().names().toCompletionStage.asScala, metadataWaitMs.seconds)
       names.contains(topic)
     }
 
-  // a topic that does not exist is assumed to have the same config as any other topic
+  // a topic that does not exist is assumed to have the same wordCountConfig as any other topic
   val doesTopicHaveSameConfig: (AdminClient, String, Int, Short) => Boolean =
     (adminClient: AdminClient, topic: String, partitionCount: Int, replicationFactor: Short) => {
 
       if (doesTopicExist(adminClient, topic)) {
-
         val topicDescriptions: mutable.Map[String, TopicDescription] = Await
-          .result(adminClient.describeTopics(List(topic).asJava).allTopicNames().toCompletionStage.asScala, 60.seconds)
+          .result(
+            adminClient
+              .describeTopics(List(topic).asJava)
+              .allTopicNames()
+              .toCompletionStage
+              .asScala,
+            metadataWaitMs.seconds
+          )
           .asScala
 
         topicDescriptions.get(topic).exists { desc =>

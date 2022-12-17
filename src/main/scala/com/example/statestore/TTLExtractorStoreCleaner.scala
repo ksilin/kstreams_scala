@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.StrictLogging
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.Transformer
 import org.apache.kafka.streams.processor.ProcessorContext
-import org.apache.kafka.streams.processor.{Cancellable, PunctuationType, Punctuator}
+import org.apache.kafka.streams.processor.{ Cancellable, PunctuationType, Punctuator }
 import org.apache.kafka.streams.state.KeyValueStore
 
 import java.lang

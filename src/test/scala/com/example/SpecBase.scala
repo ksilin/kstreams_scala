@@ -17,7 +17,10 @@ class SpecBase extends AnyFreeSpecLike with LogSupport with Matchers with Future
   streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, this.suiteName)
   streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "DUMMY_CONFIG")
   // we want to see the topology exactly as we created it:
-  streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION)
+  streamsConfiguration.put(
+    StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
+    StreamsConfig.NO_OPTIMIZATION
+  )
   streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   streamsConfiguration.put(ConsumerConfig.GROUP_ID_CONFIG, this.suiteName)
   // streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)

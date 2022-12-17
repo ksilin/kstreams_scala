@@ -30,7 +30,7 @@ object WordCount {
     builder.build()
   }
 
-  case class Config(
+  case class WordCountConfig(
       inputTopic: String = "FALLBACK_INPUT_TOPIC",
       outputTopic: String = "FALLBACK_OUTPUT_TOPIC",
       bootstrapServer: String = "FALLBACK_BOOTSTRAP_SERVER"
