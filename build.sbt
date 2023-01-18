@@ -10,7 +10,7 @@ inThisBuild(
     versionScheme := Some("semver-spec"),
     startYear := Some(2021),
     licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0")),
-    scalaVersion := "2.13.8",
+    scalaVersion := "2.13.10",
     scalacOptions ++= Seq(
       "-deprecation",
       "-unchecked",
@@ -119,12 +119,12 @@ lazy val commonSettings =
 lazy val library =
   new {
     object Version {
-      val kafka             = "3.3.0"
-      val confluent         = "7.3.0"
+      val kafka             = "3.3.1"
+      val confluent         = "7.3.1"
       val circeKafka        = "3.1.0"
       val circe             = "0.13.0"
       val kafkaStreamsCirce = "0.6.3"
-      val gson              = "2.9.0"
+      val gson              = "2.9.1"
       val testContainers    = "0.2.1"
       val embeddedKafka     = "3.3.1"
       val betterFiles       = "3.9.1"
@@ -132,7 +132,7 @@ lazy val library =
       val scopt             = "4.1.0"
       val airframeLog       = "22.7.1"
       val logback           = "1.2.11"
-      val scalatest         = "3.2.12"
+      val scalatest         = "3.2.15"
       val log4j             = "1.2.17"
       val slfLog4j          = "1.7.30"
     }
