@@ -1,20 +1,20 @@
 package com.example.patterns
 
-import com.example.serde.{GsonDeserializer, GsonSerializer}
+import com.example.serde.{ GsonDeserializer, GsonSerializer }
 import com.google.gson.Gson
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
+import org.apache.kafka.common.serialization.{ Deserializer, Serde, Serializer }
 import org.apache.kafka.streams.Topology
-import org.apache.kafka.streams.processor.api.{Processor, ProcessorContext, Record}
+import org.apache.kafka.streams.processor.api.{ Processor, ProcessorContext, Record }
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.kstream.KStream
 import org.apache.kafka.streams.state.KeyValueStore
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes.stringSerde
-import org.apache.kafka.streams.state.{StoreBuilder, Stores}
+import org.apache.kafka.streams.state.{ StoreBuilder, Stores }
 import org.apache.kafka.streams.kstream.Named
-import org.apache.kafka.common.serialization.{Serdes => JSerdes}
-import org.apache.kafka.streams.kstream.{Produced => ProducedJ}
-import org.apache.kafka.streams.processor.{RecordContext, TopicNameExtractor}
+import org.apache.kafka.common.serialization.{ Serdes => JSerdes }
+import org.apache.kafka.streams.kstream.{ Produced => ProducedJ }
+import org.apache.kafka.streams.processor.{ RecordContext, TopicNameExtractor }
 import wvlet.log.LogSupport
 
 case object EventRouterTopology extends LogSupport {
@@ -157,7 +157,9 @@ case object EventRouterTopology extends LogSupport {
 
       def updateMapping(currentMapping: RouteMappings, newData: String): Unit = {
         val updatedTargetIds = (currentMapping.targetIds.toSet + newData).toArray
-        logger.info(s"updating ${currentMapping.targetIds} to current: ${updatedTargetIds}")
+        logger.info(
+          s"updating ${currentMapping.targetIds.mkString} to current: ${updatedTargetIds.mkString}"
+        )
         val newMapping = currentMapping.copy(targetIds = updatedTargetIds)
         productRouteMappingStore.put(currentMapping.productId, newMapping)
       }
@@ -171,7 +173,7 @@ case object EventRouterTopology extends LogSupport {
 
       var ctx: ProcessorContext[String, ProductWithRoute]         = _
       var routeMappingStore: KeyValueStore[String, RouteMappings] = _
-      val fallbackMapping                                         = "NO MAPPING FOUND"
+      val fallbackMapping: List[String]                           = List("NO MAPPING FOUND")
 
       override def init(context: ProcessorContext[String, ProductWithRoute]): Unit = {
         logger.info("initializing product data processor")
@@ -184,25 +186,24 @@ case object EventRouterTopology extends LogSupport {
         val productId: String = record.key()
         logger.info(s"processing data: $productId $data")
 
-        Option(routeMappingStore.get(productId)) map (c =>
-          c.targetIds foreach { target =>
-            val outRecord = ProductWithRoute(data, target)
-
-            val r: Record[String, ProductWithRoute] =
-              new Record[String, ProductWithRoute](productId, outRecord, record.timestamp())
-            ctx.forward(r, sinkProcessor)
-          }
-        ) getOrElse {
+        val targets: List[String] = Option(routeMappingStore.get(productId)) map { c =>
+          c.targetIds.toList
+        } getOrElse {
           logger.warn(
-            s"no current routing information found for $productId at ${record
-              .timestamp()}. forwarding to fallback."
+            s"no routing information found for $productId. forwarding to fallback."
           )
-          val outRecord = ProductWithRoute(data, fallbackMapping)
-          val r: Record[String, ProductWithRoute] =
-            new Record[String, ProductWithRoute](productId, outRecord, record.timestamp())
-          ctx.forward(r, sinkProcessor)
+          fallbackMapping
         }
+        val outRecords: List[Record[String, ProductWithRoute]] =
+          targetIdsToRecords(productId, data, targets, record.timestamp())
+        outRecords.foreach(r => ctx.forward(r, sinkProcessor))
       }
+    }
+
+  def targetIdsToRecords(productId: String, data: String, targets: List[String], timestamp: Long) =
+    targets map { target =>
+      val outRecord = ProductWithRoute(data, target)
+      new Record[String, ProductWithRoute](productId, outRecord, timestamp)
     }
 
 }
